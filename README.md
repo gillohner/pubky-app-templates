@@ -9,7 +9,7 @@ builds.
 
 ## Templates
 
-- [basic-pubky-app](basic-pubky-app/) - Minimal Vite + TypeScript app with auth, storage, and event streaming:
+- [basic-pubky-app](basic-pubky-app/) - Minimal Vite + TypeScript app with Pubky Auth, file storage, and an event stream subscription:
   `npx tiged pubky/pubky-app-templates/basic-pubky-app my-pubky-app`
 
 - [pubky-signer-app](pubky-signer-app/) - Pubky Identity Manager template for testing Pubky Ring auth flows:
