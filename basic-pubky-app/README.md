@@ -30,7 +30,10 @@ npm install
 npm run dev
 ```
 
-Use **Sign in with [Pubky Ring](https://pubkyring.app/)** to authorize an app session. For local testnet development, use the [Pubky Identity Manager template](https://github.com/pubky/pubky-app-templates/tree/main/pubky-signer-app) as a stand-in. With `vite dev` and `VITE_PUBKY_TESTNET=true`, **New identity** provides a development auth shortcut.
+Use **Sign in with [Pubky Ring](https://pubkyring.app/)** to authorize an app session. For local
+testnet development, the [Pubky Ring Simulator](https://simulator.pubkyring.app) can
+approve sign-in requests. With `vite dev` and `VITE_PUBKY_TESTNET=true`, **New identity** provides a
+development auth shortcut.
 
 For complete local Homeserver, testnet, and authentication setup, follow the [Pubky Developer Guide](https://pubky.org/explore/pubkycore/getting-started/).
 

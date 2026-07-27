@@ -34,6 +34,40 @@ h1 {
 
 .intro span { display: block; }
 
+.login-note {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  color: #52606d;
+  background: #f8fafc;
+}
+
+.login-note__icon {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #52606d;
+  background: #e5e9ef;
+  font-weight: 700;
+}
+
+.login-note p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.login-note a {
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
 .templates {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
