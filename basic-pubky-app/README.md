@@ -31,7 +31,7 @@ npm run dev
 ```
 
 Use **Sign in with [Pubky Ring](https://pubkyring.app/)** to authorize an app session. For local
-testnet development, the [Pubky Ring Simulator](https://pubky.github.io/pubky-ring-simulator) can
+testnet development, the [Pubky Ring Simulator](https://simulator.pubkyring.app) can
 approve sign-in requests. With `vite dev` and `VITE_PUBKY_TESTNET=true`, **New identity** provides a
 development auth shortcut.
 
