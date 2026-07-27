@@ -8,16 +8,16 @@ This template focuses on Pubky’s core building blocks. The included vanilla HT
 
 ## What's Included
 
-- Pubky Ring sign-in with a QR code, magic link button and copy-to-clipboard action.
+- Pubky Ring sign-in with a QR code, authorization link, and copy-to-clipboard action.
 - A development-only authentication shortcut that removes sign-in friction on a local testnet. It is not intended as a pattern for production apps.
 - Session persistence across page reloads, plus sign out.
-- CRUD helpers for data under a configured path on the user’s Homeserver.
+- File storage helpers under a configured path on the user’s Homeserver.
 - A live event stream subscription scoped to the configured path.
 - Preconfigured weekly Dependabot updates for all npm dependencies, with Pubky stack packages grouped together.
 
 ## What's Not Included
 
-- Identity key and recovery phrase management. Pubky apps should delegate these responsibilities to a dedicated identity manager such as Pubky Ring, keeping identity keys outside the app.
+- Identity key and recovery phrase management. Pubky apps should delegate these responsibilities to a dedicated identity manager such as Pubky Ring, keeping keypairs outside the app.
 - Homeserver admin tools.
 - An aggregator or indexer. This template talks directly to the user’s Homeserver and does not provide cross-Homeserver aggregation or data indexing.
 
