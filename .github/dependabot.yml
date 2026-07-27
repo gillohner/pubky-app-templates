@@ -16,6 +16,9 @@ updates:
       repo-tools:
         patterns:
           - '*'
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: npm
     directory: /basic-pubky-app
     schedule:
