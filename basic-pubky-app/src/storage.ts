@@ -28,9 +28,27 @@ export async function listFiles(session: Session) {
   return files.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
+const LIST_PAGE_SIZE = 50
+
 async function listFileUrls(session: Session) {
   try {
-    return await session.storage.list(FILES_DIR, null, true, 50, true)
+    const urls: string[] = []
+    let cursor: string | null = null
+
+    // The last listed URL is the next cursor; session.storage.list does not return a separate cursor field.
+    while (true) {
+      const batch = await session.storage.list(FILES_DIR, cursor, true, LIST_PAGE_SIZE, true)
+      if (batch.length === 0) break
+
+      const nextCursor = batch[batch.length - 1]
+      if (!nextCursor || nextCursor === cursor) break
+
+      urls.push(...batch)
+      if (batch.length < LIST_PAGE_SIZE) break
+      cursor = nextCursor
+    }
+
+    return urls
   } catch (error) {
     if (isNotFound(error)) return []
     throw error

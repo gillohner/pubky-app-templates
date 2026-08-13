@@ -23,6 +23,8 @@ This template focuses on Pubky’s core building blocks. The included vanilla HT
 
 ## Quick Start
 
+Requires Node.js 20.19+ or 22.12+.
+
 ```bash
 npx tiged pubky/pubky-app-templates/basic-pubky-app my-pubky-app
 cd my-pubky-app
