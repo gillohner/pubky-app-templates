@@ -8,6 +8,8 @@ The Basic Pubky App is available as mainnet and local testnet builds.
 
 ## Templates
 
+Templates require Node.js 20.19+ or 22.12+.
+
 - [basic-pubky-app](basic-pubky-app/) - Minimal Vite + TypeScript app with Pubky Auth, file storage, and an event stream subscription:
   `npx tiged pubky/pubky-app-templates/basic-pubky-app my-pubky-app`
 

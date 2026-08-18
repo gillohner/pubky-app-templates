@@ -6,6 +6,8 @@ It does not include the Pubky SDK or any Pubky app code. The tutorial adds those
 
 ## Quick Start
 
+Requires Node.js 20.19+ or 22.12+.
+
 ```bash
 npx tiged pubky/pubky-app-templates/vite-starter my-pubky-app
 cd my-pubky-app

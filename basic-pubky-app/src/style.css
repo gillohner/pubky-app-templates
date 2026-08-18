@@ -32,9 +32,10 @@ textarea {
 }
 
 button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: 0.55; }
+button:disabled,
+a[aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
 button:not(:disabled):hover,
-.button-link:hover { border-color: #98a2b3; }
+.button-link:not([aria-disabled="true"]):hover { border-color: #98a2b3; }
 .button-link {
   display: inline-flex;
   align-items: center;
@@ -48,7 +49,7 @@ button:not(:disabled):hover,
   color: #ffffff;
   background: #17202a;
 }
-.button-link.primary:hover { border-color: #344054; background: #344054; }
+.button-link.primary:not([aria-disabled="true"]):hover { border-color: #344054; background: #344054; }
 input, textarea { width: 100%; }
 textarea { resize: vertical; }
 
