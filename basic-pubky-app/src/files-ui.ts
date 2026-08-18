@@ -6,7 +6,7 @@ export function editorPanelHtml(files: AppFile[], editingId: string | undefined,
     <section class="panel">
       <div class="section-header">
         <h2>Editor</h2>
-        <button id="new-file" type="button" ${disabledAttr(Boolean(busy))}>New</button>
+        <span id="new-file-slot">${newFileButtonHtml(editingId, busy)}</span>
       </div>
       <div id="editor">${fileFormHtml(files, editingId, busy)}</div>
     </section>
@@ -24,14 +24,21 @@ export function filesPanelHtml(files: AppFile[], busy?: string) {
 
 export function updateEditor(files: AppFile[], editingId: string | undefined, busy?: string) {
   const editor = document.querySelector('#editor')
-  if (!editor) return
-  editor.innerHTML = fileFormHtml(files, editingId, busy)
+  if (editor) editor.innerHTML = fileFormHtml(files, editingId, busy)
+
+  const slot = document.querySelector('#new-file-slot')
+  if (slot) slot.innerHTML = newFileButtonHtml(editingId, busy)
 }
 
 export function updateFilesList(files: AppFile[], busy?: string) {
   const list = document.querySelector('#files-list')
   if (!list) return
   list.innerHTML = filesListHtml(files, busy)
+}
+
+function newFileButtonHtml(editingId: string | undefined, busy?: string) {
+  if (!editingId) return ''
+  return `<button id="new-file" type="button" ${disabledAttr(Boolean(busy))}>New</button>`
 }
 
 function fileFormHtml(files: AppFile[], editingId: string | undefined, busy?: string) {

@@ -1,5 +1,5 @@
 import { AuthFlowKind, Keypair, Pubky, PublicKey } from '@synonymdev/pubky'
-import type { AuthFlow, Session } from '@synonymdev/pubky'
+import type { GrantAuthFlow, Session } from '@synonymdev/pubky'
 import {
   APP_CAPABILITIES,
   APP_CLIENT_ID,
@@ -14,8 +14,8 @@ const SESSION_KEY = STORAGE_NAMESPACE
   : `${APP_CLIENT_ID}:session`
 const RING_AUTH_CANCELED_ERROR_NAME = 'RingAuthCanceled'
 const RING_AUTH_EXPIRED_ERROR_NAME = 'RingAuthExpired'
-const RING_AUTH_POLL_INTERVAL_MS = 1200
-const RING_AUTH_MAX_POLL_ATTEMPTS = 250
+const CLOSED_SIGNUP_MESSAGE =
+  'This homeserver does not allow open signup. Start it with signup_mode = "open" for New identity, or sign in with Pubky Ring.'
 
 export const pubky = IS_TESTNET ? Pubky.testnet(TESTNET_HOST) : new Pubky()
 
@@ -29,11 +29,20 @@ export async function signupDevelopmentUser(homeserver: string) {
   const signer = pubky.signer(Keypair.random())
   const homeserverKey = PublicKey.from(homeserver.trim())
 
-  return signer.signup(homeserverKey, null)
+  try {
+    await signer.signup(homeserverKey, null)
+  } catch (error) {
+    throw closedSignupError(error)
+  }
+
+  return signer.signin(APP_CLIENT_ID)
 }
 
-export function startRingAuthFlow(): RingAuthFlow {
-  const flow = pubky.startAuthFlow(APP_CAPABILITIES, AuthFlowKind.signin(), HTTP_RELAY)
+export async function startRingAuthFlow(): Promise<RingAuthFlow> {
+  const flow = await pubky.startGrantAuthFlow(APP_CAPABILITIES, AuthFlowKind.signin(), {
+    clientId: APP_CLIENT_ID,
+    relay: HTTP_RELAY,
+  })
   const approval = awaitRingApproval(flow)
 
   return {
@@ -43,19 +52,20 @@ export function startRingAuthFlow(): RingAuthFlow {
   }
 }
 
-export function saveSession(session: Session) {
-  localStorage.setItem(SESSION_KEY, session.export())
+export async function saveSession(session: Session) {
+  const stored = await pubky.browserSessionStore.save(session)
+  localStorage.setItem(SESSION_KEY, stored.id)
 }
 
 export async function restoreSavedSession() {
-  const savedSession = localStorage.getItem(SESSION_KEY)
-  if (!savedSession) return undefined
+  const savedId = localStorage.getItem(SESSION_KEY)
+  if (!savedId) return undefined
 
   try {
-    return await pubky.restoreSession(savedSession)
+    return await pubky.browserSessionStore.restore(savedId)
   } catch (error) {
     if (isInvalidSavedSessionError(error)) {
-      localStorage.removeItem(SESSION_KEY)
+      await forgetSavedSession(savedId)
       return undefined
     }
 
@@ -64,8 +74,9 @@ export async function restoreSavedSession() {
 }
 
 export async function signOut(session: Session) {
+  const savedId = localStorage.getItem(SESSION_KEY)
   await session.signout()
-  localStorage.removeItem(SESSION_KEY)
+  await forgetSavedSession(savedId)
 }
 
 export function isRingAuthCanceled(error: unknown) {
@@ -76,7 +87,7 @@ export function isRingAuthExpired(error: unknown) {
   return isErrorNamed(error, RING_AUTH_EXPIRED_ERROR_NAME)
 }
 
-function awaitRingApproval(flow: AuthFlow) {
+function awaitRingApproval(flow: GrantAuthFlow) {
   let canceled = false
   let freed = false
 
@@ -93,29 +104,95 @@ function awaitRingApproval(flow: AuthFlow) {
   }
 
   const awaitApproval = (async () => {
-    for (let attempt = 1; attempt <= RING_AUTH_MAX_POLL_ATTEMPTS; attempt++) {
+    try {
+      const session = await flow.awaitApproval()
       if (canceled) throw ringAuthCanceledError()
-
-      try {
-        const session = await flow.tryPollOnce()
-        if (session) return session
-      } catch (error) {
-        if (canceled) throw ringAuthCanceledError()
-        throw error
-      }
-
-      if (attempt < RING_AUTH_MAX_POLL_ATTEMPTS) {
-        await sleep(RING_AUTH_POLL_INTERVAL_MS)
-      }
+      return session
+    } catch (error) {
+      if (canceled) throw ringAuthCanceledError()
+      if (isExpiredAuthError(error)) throw ringAuthExpiredError()
+      throw error
     }
-
-    throw ringAuthExpiredError()
   })()
 
   return {
     awaitApproval: awaitApproval.finally(cancel),
     cancel,
   }
+}
+
+async function forgetSavedSession(savedId: string | null) {
+  localStorage.removeItem(SESSION_KEY)
+  if (!savedId) return
+
+  try {
+    await pubky.browserSessionStore.remove(savedId)
+  } catch {
+    // Local IndexedDB state may already be gone after a failed restore.
+  }
+}
+
+function closedSignupError(error: unknown) {
+  if (!isClosedSignupError(error)) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+
+  const wrapped = new Error(CLOSED_SIGNUP_MESSAGE)
+  wrapped.cause = error
+  return wrapped
+}
+
+function isClosedSignupError(error: unknown) {
+  const statusCode = errorStatusCode(error)
+  const text = errorText(error).toLowerCase()
+
+  if (statusCode === 400) return true
+  if ((statusCode === 401 || statusCode === 403) && /signup|token|invite/.test(text)) {
+    return true
+  }
+
+  return (
+    isErrorNamed(error, 'AuthenticationError') ||
+    text.includes('signup token required') ||
+    text.includes('signup_mode') ||
+    text.includes('token required')
+  )
+}
+
+function isExpiredAuthError(error: unknown) {
+  const text = errorText(error).toLowerCase()
+  return text.includes('expired') || text.includes('timed out') || text.includes('timeout')
+}
+
+function isInvalidSavedSessionError(error: unknown) {
+  return (
+    isErrorNamed(error, 'AuthenticationError') ||
+    isErrorNamed(error, 'InvalidInput') ||
+    isErrorNamed(error, 'ClientStateError')
+  )
+}
+
+function isErrorNamed(error: unknown, name: string) {
+  return error instanceof Error && error.name === name
+}
+
+function errorStatusCode(error: unknown) {
+  if (!isRecord(error) || !isRecord(error.data)) return undefined
+  const statusCode = error.data.statusCode
+  return typeof statusCode === 'number' ? statusCode : undefined
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = error.cause === undefined ? '' : ` ${errorText(error.cause)}`
+    return `${error.name} ${error.message}${cause}`
+  }
+
+  return String(error)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function ringAuthCanceledError() {
@@ -128,16 +205,4 @@ function ringAuthExpiredError() {
   const error = new Error('Pubky Ring sign-in link expired. Generate a fresh link and try again.')
   error.name = RING_AUTH_EXPIRED_ERROR_NAME
   return error
-}
-
-function isInvalidSavedSessionError(error: unknown) {
-  return isErrorNamed(error, 'AuthenticationError') || isErrorNamed(error, 'InvalidInput')
-}
-
-function isErrorNamed(error: unknown, name: string) {
-  return error instanceof Error && error.name === name
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }

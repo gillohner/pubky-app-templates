@@ -217,7 +217,7 @@ async function refreshRingSignin(preserveError = false) {
   syncControls()
 
   try {
-    const flow = startRingAuthFlow()
+    const flow = await startRingAuthFlow()
     state.ringAuthFlow = flow
 
     if (!isActiveRingSignin(token)) {
@@ -252,7 +252,7 @@ async function handleRingApproval(flow: RingAuthFlow, token: symbol) {
 
     state.ringAuthFlow = undefined
     await run('Completing Pubky Ring sign-in...', async () => {
-      saveSession(session)
+      await saveSession(session)
       await activateSession(session, 'Signed in with Pubky Ring.')
     })
   } catch (error) {
@@ -295,7 +295,7 @@ async function handleDevelopmentSignup(form: HTMLFormElement) {
 
   await run('Creating identity...', async () => {
     const session = await signupDevelopmentUser(homeserver)
-    saveSession(session)
+    await saveSession(session)
     await activateSession(session, 'Identity created and signed in.')
   })
 }
