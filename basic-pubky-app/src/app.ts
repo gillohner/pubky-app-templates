@@ -1,4 +1,5 @@
 import type { Session } from '@synonymdev/pubky'
+import { version as pubkySdkVersion } from '@synonymdev/pubky/package.json'
 import {
   isAuthorizeRingLink,
   authViewHtml,
@@ -83,6 +84,7 @@ function mount() {
       </header>
       <div id="status">${statusHtml()}</div>
       <div id="view">${session ? signedInViewHtml() : authViewHtml(state.ringSignin, state.busy)}</div>
+      <footer class="app-footer">Built with <a href="https://www.npmjs.com/package/@synonymdev/pubky">Pubky SDK</a> v${pubkySdkVersion}</footer>
     </main>
   `
 
