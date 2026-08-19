@@ -15,7 +15,7 @@ const SESSION_KEY = STORAGE_NAMESPACE
 const RING_AUTH_CANCELED_ERROR_NAME = 'RingAuthCanceled'
 const RING_AUTH_EXPIRED_ERROR_NAME = 'RingAuthExpired'
 const CLOSED_SIGNUP_MESSAGE =
-  'This homeserver does not allow open signup. Start it with signup_mode = "open" for New identity, or sign in with Pubky Ring.'
+  'This homeserver does not allow open signup. Start it with \'signup_mode = "open"\' for creating new identities.'
 
 export const pubky = IS_TESTNET ? Pubky.testnet(TESTNET_HOST) : new Pubky()
 
