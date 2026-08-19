@@ -1,4 +1,4 @@
-[![Pubky](https://img.shields.io/badge/Pubky-0.9.3-blue)](https://www.npmjs.com/package/@synonymdev/pubky/v/0.9.3)
+[![Pubky](https://img.shields.io/badge/Pubky-0.10.0-blue)](https://www.npmjs.com/package/@synonymdev/pubky/v/0.10.0)
 
 # Basic Pubky App
 
@@ -8,9 +8,9 @@ This template focuses on Pubky’s core building blocks. The included vanilla HT
 
 ## What's Included
 
-- Pubky Ring sign-in with a QR code, authorization link, and copy-to-clipboard action.
-- A development-only authentication shortcut that removes sign-in friction on a local testnet. It is not intended as a pattern for production apps.
-- Session persistence across page reloads, plus sign out.
+- Grant-based Pubky Ring sign-in with a QR code, authorization link, and copy-to-clipboard action.
+- A development-only authentication shortcut that removes sign-in friction on a local testnet. It requires `signup_mode = "open"` and is not intended as a pattern for production apps.
+- Session persistence across page reloads via the SDK browser session store, plus sign out.
 - File storage helpers under a configured path on the user’s Homeserver.
 - A live event stream subscription scoped to the configured path.
 - Preconfigured weekly Dependabot updates for all npm dependencies, with Pubky stack packages grouped together.
@@ -35,7 +35,7 @@ npm run dev
 Use **Sign in with [Pubky Ring](https://pubkyring.app/)** to authorize an app session. For local
 testnet development, the [Pubky Ring Simulator](https://simulator.pubkyring.app) can
 approve sign-in requests. With `vite dev` and `VITE_PUBKY_TESTNET=true`, **New identity** provides a
-development auth shortcut.
+development auth shortcut; the homeserver must run with `signup_mode = "open"`.
 
 For complete local Homeserver, testnet, and authentication setup, follow the [Pubky Developer Guide](https://pubky.org/explore/pubkycore/getting-started/).
 

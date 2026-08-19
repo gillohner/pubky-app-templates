@@ -1,4 +1,5 @@
 import type { Session } from '@synonymdev/pubky'
+import { version as pubkySdkVersion } from '@synonymdev/pubky/package.json'
 import {
   isAuthorizeRingLink,
   authViewHtml,
@@ -83,6 +84,7 @@ function mount() {
       </header>
       <div id="status">${statusHtml()}</div>
       <div id="view">${session ? signedInViewHtml() : authViewHtml(state.ringSignin, state.busy)}</div>
+      <footer class="app-footer">Built with <a href="https://www.npmjs.com/package/@synonymdev/pubky">Pubky SDK</a> v${pubkySdkVersion}</footer>
     </main>
   `
 
@@ -217,7 +219,7 @@ async function refreshRingSignin(preserveError = false) {
   syncControls()
 
   try {
-    const flow = startRingAuthFlow()
+    const flow = await startRingAuthFlow()
     state.ringAuthFlow = flow
 
     if (!isActiveRingSignin(token)) {
@@ -252,7 +254,7 @@ async function handleRingApproval(flow: RingAuthFlow, token: symbol) {
 
     state.ringAuthFlow = undefined
     await run('Completing Pubky Ring sign-in...', async () => {
-      saveSession(session)
+      await saveSession(session)
       await activateSession(session, 'Signed in with Pubky Ring.')
     })
   } catch (error) {
@@ -295,7 +297,7 @@ async function handleDevelopmentSignup(form: HTMLFormElement) {
 
   await run('Creating identity...', async () => {
     const session = await signupDevelopmentUser(homeserver)
-    saveSession(session)
+    await saveSession(session)
     await activateSession(session, 'Identity created and signed in.')
   })
 }

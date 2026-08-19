@@ -152,6 +152,10 @@ function newIdentityPanel(busy?: string) {
         Create a new keypair, sign up and sign in on the homeserver, in one go.
         Primarily for development, to move through auth quickly.
       </p>
+      <p class="muted">
+        Requires the homeserver to run with signup_mode = "open". If signup is closed or
+        token-required, this shortcut will fail; use Pubky Ring instead.
+      </p>
       <form id="development-signup-form" class="form-grid">
         <label>
           Homeserver public key
