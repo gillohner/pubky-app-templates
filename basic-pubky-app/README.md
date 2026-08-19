@@ -1,4 +1,4 @@
-[![Pubky](https://img.shields.io/badge/Pubky-0.10.0-blue)](https://www.npmjs.com/package/@synonymdev/pubky/v/0.10.0)
+[![Pubky](https://img.shields.io/badge/Pubky-0.11.0-blue)](https://www.npmjs.com/package/@synonymdev/pubky/v/0.11.0)
 
 # Basic Pubky App
 
