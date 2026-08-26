@@ -21,6 +21,12 @@ import {
   statusMessage,
 } from './html'
 import {
+  acknowledgePassportOutcome,
+  readCallbackOutcome,
+  readPassportOutcomeMessage,
+  type PassportOutcome,
+} from './passport'
+import {
   isRingAuthCanceled,
   isRingAuthExpired,
   restoreSavedSession,
@@ -39,6 +45,7 @@ interface State {
   notice?: string
   noticePath?: string
   files: AppFile[]
+  passportPopup?: Window | null
   ringAuthFlow?: RingAuthFlow
   ringSignin: RingSigninState
   session?: Session
@@ -58,6 +65,10 @@ export function start(root: HTMLElement) {
   app = root
   app.addEventListener('click', handleClick)
   app.addEventListener('submit', handleSubmit)
+  window.addEventListener('message', handlePassportMessage)
+
+  const callbackOutcome = readCallbackOutcome()
+  if (callbackOutcome) setPassportOutcome(callbackOutcome)
   mount()
   void init()
 }
@@ -141,6 +152,9 @@ function syncControls() {
       case 'copy-authorization-url':
         button.disabled = !canUse
         break
+      case 'open-passport':
+        button.disabled = !canUse || !state.ringSignin.passportAuthorizationUrl
+        break
       default:
         button.disabled = busy
         break
@@ -179,6 +193,9 @@ function handleClick(event: MouseEvent) {
       break
     case 'copy-authorization-url':
       void handleCopyAuthorizationUrl()
+      break
+    case 'open-passport':
+      handleOpenPassport()
       break
     case 'sign-out':
       void handleSignOut()
@@ -229,6 +246,7 @@ async function refreshRingSignin(preserveError = false) {
 
     state.ringSignin = {
       authorizationUrl: flow.authorizationUrl,
+      passportAuthorizationUrl: flow.passportAuthorizationUrl,
       token,
     }
     updateRingPanel(state.ringSignin, state.busy)
@@ -261,6 +279,7 @@ async function handleRingApproval(flow: RingAuthFlow, token: symbol) {
     if (isRingAuthCanceled(error) || !isActiveRingSignin(token)) return
 
     state.ringAuthFlow = undefined
+    closePassportPopup()
     state.ringSignin = isRingAuthExpired(error) ? { expired: true, token } : {}
     setError(error)
     updateStatus()
@@ -270,24 +289,86 @@ async function handleRingApproval(flow: RingAuthFlow, token: symbol) {
 }
 
 async function handleCopyAuthorizationUrl() {
-  const authorizationUrl = state.ringSignin.authorizationUrl
+  const authorizationUrl = state.ringSignin.passportAuthorizationUrl
   if (!authorizationUrl || state.ringSignin.expired) return
 
   try {
     await copyTextToClipboard(authorizationUrl)
     state.ringSignin.copied = true
-    setNotice('Authorization URL copied.')
+    setNotice('Passport #d authorization URL copied.')
     updateStatus()
     updateCopyButton(true)
 
     window.setTimeout(() => {
-      if (state.ringSignin.authorizationUrl !== authorizationUrl) return
+      if (state.ringSignin.passportAuthorizationUrl !== authorizationUrl) return
       state.ringSignin.copied = false
       updateCopyButton(false)
     }, 2200)
   } catch (error) {
     setError(error)
     updateStatus()
+  }
+}
+
+function handleOpenPassport() {
+  const authorizationUrl = state.ringSignin.passportAuthorizationUrl
+  if (!authorizationUrl || state.ringSignin.expired) return
+
+  const width = 520
+  const height = 760
+  const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
+  const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
+  const popup = window.open(
+    authorizationUrl,
+    'pubky-passport-authorization',
+    `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
+  )
+
+  if (!popup) {
+    setError(new Error('Passport popup was blocked. Allow popups for this site and try again.'))
+    updateStatus()
+    return
+  }
+
+  state.passportPopup = popup
+  popup.focus()
+  setNotice('Passport opened. Complete the authorization in the popup.')
+  updateStatus()
+}
+
+function handlePassportMessage(event: MessageEvent) {
+  const popup = state.passportPopup
+  const message = readPassportOutcomeMessage(event, popup)
+  if (!message || !popup) return
+
+  try {
+    acknowledgePassportOutcome(popup, message.messageId)
+  } catch (error) {
+    setError(error)
+    updateStatus()
+    return
+  }
+
+  state.passportPopup = undefined
+  setPassportOutcome(message.outcome)
+  updateStatus()
+
+  if (message.outcome !== 'success') {
+    void refreshRingSignin(true)
+  }
+}
+
+function setPassportOutcome(outcome: PassportOutcome) {
+  switch (outcome) {
+    case 'success':
+      setNotice('Passport approved the request. Completing the Pubky session...')
+      break
+    case 'error':
+      setError(new Error('Passport could not approve the authorization request.'))
+      break
+    case 'cancel':
+      setNotice('Passport authorization was cancelled.')
+      break
   }
 }
 
@@ -417,7 +498,18 @@ async function activateSession(session: Session, notice: string) {
 function cancelRingSignin() {
   const flow = state.ringAuthFlow
   state.ringAuthFlow = undefined
+  closePassportPopup()
   flow?.cancel()
+}
+
+function closePassportPopup() {
+  const popup = state.passportPopup
+  state.passportPopup = undefined
+  try {
+    if (popup && !popup.closed) popup.close()
+  } catch {
+    // Popup cleanup is best effort when the cross-origin window is unavailable.
+  }
 }
 
 function isActiveRingSignin(token: symbol) {

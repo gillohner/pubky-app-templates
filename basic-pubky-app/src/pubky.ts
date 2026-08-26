@@ -8,6 +8,7 @@ import {
   STORAGE_NAMESPACE,
   TESTNET_HOST,
 } from './config'
+import { createPassportAuthorizationUrl, createPassportCallbacks } from './passport'
 
 const SESSION_KEY = STORAGE_NAMESPACE
   ? `${STORAGE_NAMESPACE}:${APP_CLIENT_ID}:session`
@@ -21,6 +22,7 @@ export const pubky = IS_TESTNET ? Pubky.testnet(TESTNET_HOST) : new Pubky()
 
 export interface RingAuthFlow {
   authorizationUrl: string
+  passportAuthorizationUrl: string
   awaitApproval: Promise<Session>
   cancel: () => void
 }
@@ -42,11 +44,13 @@ export async function startRingAuthFlow(): Promise<RingAuthFlow> {
   const flow = await pubky.startGrantAuthFlow(APP_CAPABILITIES, AuthFlowKind.signin(), {
     clientId: APP_CLIENT_ID,
     relay: HTTP_RELAY,
+    xCallback: createPassportCallbacks(),
   })
   const approval = awaitRingApproval(flow)
 
   return {
     authorizationUrl: flow.authorizationUrl,
+    passportAuthorizationUrl: createPassportAuthorizationUrl(flow.authorizationUrl),
     awaitApproval: approval.awaitApproval,
     cancel: approval.cancel,
   }

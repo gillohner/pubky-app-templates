@@ -8,7 +8,8 @@ This template focuses on Pubky’s core building blocks. The included vanilla HT
 
 ## What's Included
 
-- Grant-based Pubky Ring sign-in with a QR code, authorization link, and copy-to-clipboard action.
+- Grant-based sign-in through a popup at `https://passport.staging.pubky.app`, including HTTPS outcome callbacks and the Passport `#d` authorization fragment.
+- Pubky Ring sign-in with the same generated request through a QR code or authorization link.
 - A development-only authentication shortcut that removes sign-in friction on a local testnet. It requires `signup_mode = "open"` and is not intended as a pattern for production apps.
 - Session persistence across page reloads via the SDK browser session store, plus sign out.
 - File storage helpers under a configured path on the user’s Homeserver.
@@ -32,7 +33,8 @@ npm install
 npm run dev
 ```
 
-Use **Sign in with [Pubky Ring](https://pubkyring.app/)** to authorize an app session. For local
+Use **Open Passport popup** to authorize an app session with the staging Pubky Passport instance,
+or use **Open in [Pubky Ring](https://pubkyring.app/)** to send the same request to Ring. For local
 testnet development, the [Pubky Ring Simulator](https://simulator.pubkyring.app) can
 approve sign-in requests. With `vite dev` and `VITE_PUBKY_TESTNET=true`, **New identity** provides a
 development auth shortcut; the homeserver must run with `signup_mode = "open"`.
@@ -42,7 +44,26 @@ For complete local Homeserver, testnet, and authentication setup, follow the [Pu
 The hosted GitHub Pages builds are available for
 [mainnet](https://pubky.github.io/pubky-app-templates/mainnet/basic-pubky-app/) and a
 [local testnet](https://pubky.github.io/pubky-app-templates/testnet/basic-pubky-app/). Both are
-production builds and expose only Pubky Ring sign-in.
+production builds; use the mainnet build for staging Passport integration testing.
+
+## Staging Passport integration
+
+The template starts a grant auth flow with same-origin HTTPS callbacks for success, error, and
+cancellation. It then wraps the SDK-generated request for Passport like this:
+
+```ts
+const passportUrl = `https://passport.staging.pubky.app/authorize#d=${encodeURIComponent(flow.authorizationUrl)}`
+```
+
+**Open Passport popup** opens that URL with an opener. On completion, the app validates Passport's
+origin and message shape, acknowledges the outcome message, and lets Passport close the popup. If
+the opener handoff is unavailable, each callback also works as a normal HTTPS navigation back to
+the app. **Copy Passport URL** exposes the exact generated `#d` URL for focused parser testing;
+treat it as a secret because the embedded Pubky authorization request contains auth material.
+
+Local callback testing requires HTTPS. `npm run dev` uses Vite's basic SSL plugin and may require
+accepting the local development certificate once in the browser. The GitHub Pages builds are
+already served over HTTPS.
 
 ## App Settings
 

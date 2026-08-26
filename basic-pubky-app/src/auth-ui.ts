@@ -4,6 +4,7 @@ import { disabledAttr, escapeHtml } from './html'
 
 export interface RingSigninState {
   authorizationUrl?: string
+  passportAuthorizationUrl?: string
   copied?: boolean
   expired?: boolean
   loading?: boolean
@@ -31,7 +32,7 @@ export function updateRingPanel(ringSignin: RingSigninState, busy?: string) {
 
 export function updateCopyButton(copied: boolean) {
   const button = document.querySelector('#copy-authorization-url')
-  if (button) button.textContent = copied ? 'Copied' : 'Copy link'
+  if (button) button.textContent = copied ? 'Copied' : 'Copy Passport URL'
 }
 
 export function updateAuthorizeLink(canUse: boolean, authorizationUrl?: string) {
@@ -83,7 +84,10 @@ function ringPanelBody(ringSignin: RingSigninState, busy?: string) {
 
   return `
     <div class="section-header">
-      <h2>Sign in with Pubky Ring</h2>
+      <div>
+        <h2>Sign in with Pubky</h2>
+        <p class="muted">Use staging Passport in a popup, or approve the same request with Pubky Ring.</p>
+      </div>
       <button id="refresh-ring-signin" type="button" ${disabledAttr(isBusy || Boolean(loading))}>
         ${expired ? 'New link' : 'Refresh'}
       </button>
@@ -93,9 +97,12 @@ function ringPanelBody(ringSignin: RingSigninState, busy?: string) {
         ${ringQrSlot(ringSignin)}
       </div>
       <div class="ring-actions">
+        <button id="open-passport" class="primary" type="button" ${disabledAttr(!canUseAuthorizationUrl)}>
+          Open Passport popup
+        </button>
         ${authorizeLinkHtml(canUseAuthorizationUrl, authorizationUrl)}
         <button id="copy-authorization-url" type="button" ${disabledAttr(!canUseAuthorizationUrl)}>
-          ${copied ? 'Copied' : 'Copy link'}
+          ${copied ? 'Copied' : 'Copy Passport URL'}
         </button>
       </div>
     </div>
@@ -104,10 +111,10 @@ function ringPanelBody(ringSignin: RingSigninState, busy?: string) {
 
 function authorizeLinkHtml(canUse: boolean, authorizationUrl: string | undefined) {
   if (canUse && authorizationUrl) {
-    return `<a id="${AUTHORIZE_LINK_ID}" class="button-link primary" href="${escapeHtml(authorizationUrl)}">Authorize with Pubky Ring</a>`
+    return `<a id="${AUTHORIZE_LINK_ID}" class="button-link" href="${escapeHtml(authorizationUrl)}">Open in Pubky Ring</a>`
   }
 
-  return `<a id="${AUTHORIZE_LINK_ID}" class="button-link primary" aria-disabled="true">Authorize with Pubky Ring</a>`
+  return `<a id="${AUTHORIZE_LINK_ID}" class="button-link" aria-disabled="true">Open in Pubky Ring</a>`
 }
 
 function ringQrSlot(ringSignin: RingSigninState) {
