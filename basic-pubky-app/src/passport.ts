@@ -1,5 +1,5 @@
 import type { XCallbackParams } from '@synonymdev/pubky'
-import { APP_NAME, PASSPORT_ORIGIN } from './config'
+import { PASSPORT_ORIGIN } from './config'
 
 export type PassportOutcome = 'success' | 'error' | 'cancel'
 
@@ -22,7 +22,6 @@ export function createPassportCallbacks(): XCallbackParams | undefined {
   if (!passportOrigin || url.protocol !== 'https:') return undefined
 
   return {
-    xSource: APP_NAME,
     xSuccess: callbackUrl(url, 'success'),
     xError: callbackUrl(url, 'error'),
     xCancel: callbackUrl(url, 'cancel'),
