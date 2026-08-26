@@ -1,92 +1,114 @@
 import type { XCallbackParams } from '@synonymdev/pubky'
-import { PASSPORT_ORIGIN } from './config'
+import { APP_NAME, PASSPORT_ORIGIN } from './config'
 
 export type PassportOutcome = 'success' | 'error' | 'cancel'
-
-interface PassportOutcomeMessage {
-  type: 'pubky-passport.authorization-outcome'
-  version: 1
-  outcome: PassportOutcome
-  messageId: string
-}
 
 const OUTCOME_MESSAGE_TYPE = 'pubky-passport.authorization-outcome'
 const ACKNOWLEDGEMENT_MESSAGE_TYPE = 'pubky-passport.authorization-outcome-ack'
 const MESSAGE_VERSION = 1
+const CALLBACK_PARAMETER = 'passport'
+const passportOrigin = PASSPORT_ORIGIN ? new URL(PASSPORT_ORIGIN).origin : undefined
 
-export function createPassportCallbacks(): XCallbackParams {
+let popup: Window | null | undefined
+
+export function hasPassportIntegration() {
+  return Boolean(passportOrigin)
+}
+
+/** HTTPS callbacks improve popup UX; the SDK relay remains authoritative for authentication. */
+export function createPassportCallbacks(): XCallbackParams | undefined {
+  const url = new URL(window.location.href)
+  if (!passportOrigin || url.protocol !== 'https:') return undefined
+
   return {
-    xSource: 'Basic Pubky App',
-    xSuccess: callbackUrl('success'),
-    xError: callbackUrl('error'),
-    xCancel: callbackUrl('cancel'),
+    xSource: APP_NAME,
+    xSuccess: callbackUrl(url, 'success'),
+    xError: callbackUrl(url, 'error'),
+    xCancel: callbackUrl(url, 'cancel'),
   }
 }
 
 export function createPassportAuthorizationUrl(pubkyAuthorizationUrl: string) {
-  return `${PASSPORT_ORIGIN}/authorize#d=${encodeURIComponent(pubkyAuthorizationUrl)}`
+  if (!passportOrigin) return undefined
+  return `${passportOrigin}/authorize#d=${encodeURIComponent(pubkyAuthorizationUrl)}`
 }
 
+export function openPassportPopup(authorizationUrl: string) {
+  const width = 520
+  const height = 760
+  const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
+  const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
+  popup = window.open(
+    authorizationUrl,
+    'pubky-passport-authorization',
+    `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
+  )
+
+  if (!popup) return false
+  popup.focus()
+  return true
+}
+
+export function takePassportOutcome(event: MessageEvent): PassportOutcome | undefined {
+  const message = parseOutcomeMessage(event)
+  if (!message || !popup || !passportOrigin) return undefined
+
+  popup.postMessage(
+    {
+      type: ACKNOWLEDGEMENT_MESSAGE_TYPE,
+      version: MESSAGE_VERSION,
+      messageId: message.messageId,
+    },
+    passportOrigin,
+  )
+  popup = undefined
+  return message.outcome
+}
+
+export function closePassportPopup() {
+  const activePopup = popup
+  popup = undefined
+  try {
+    if (activePopup && !activePopup.closed) activePopup.close()
+  } catch {
+    // Popup cleanup is best effort when the cross-origin window is unavailable.
+  }
+}
+
+/** Reads and removes a callback navigation hint; it never establishes authentication. */
 export function readCallbackOutcome(): PassportOutcome | undefined {
   const url = new URL(window.location.href)
-  const outcome = parseOutcome(url.searchParams.get('passport'))
+  const outcome = parseOutcome(url.searchParams.get(CALLBACK_PARAMETER))
   if (!outcome) return undefined
 
-  url.searchParams.delete('passport')
+  url.searchParams.delete(CALLBACK_PARAMETER)
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
   return outcome
 }
 
-export function readPassportOutcomeMessage(
-  event: MessageEvent,
-  expectedPopup: Window | null | undefined,
-): PassportOutcomeMessage | undefined {
-  if (event.origin !== PASSPORT_ORIGIN || !expectedPopup || event.source !== expectedPopup) {
-    return undefined
-  }
+function parseOutcomeMessage(event: MessageEvent) {
+  if (event.origin !== passportOrigin || !popup || event.source !== popup) return undefined
+  if (!isRecord(event.data)) return undefined
 
-  const value: unknown = event.data
-  if (!isRecord(value)) return undefined
-
-  const outcome = parseOutcome(value.outcome)
+  const outcome = parseOutcome(event.data.outcome)
   if (
-    value.type !== OUTCOME_MESSAGE_TYPE ||
-    value.version !== MESSAGE_VERSION ||
+    event.data.type !== OUTCOME_MESSAGE_TYPE ||
+    event.data.version !== MESSAGE_VERSION ||
     !outcome ||
-    typeof value.messageId !== 'string' ||
-    value.messageId.length === 0
+    typeof event.data.messageId !== 'string' ||
+    event.data.messageId.length === 0
   ) {
     return undefined
   }
 
-  return {
-    type: OUTCOME_MESSAGE_TYPE,
-    version: MESSAGE_VERSION,
-    outcome,
-    messageId: value.messageId,
-  }
+  return { outcome, messageId: event.data.messageId }
 }
 
-export function acknowledgePassportOutcome(source: Window, messageId: string) {
-  source.postMessage(
-    {
-      type: ACKNOWLEDGEMENT_MESSAGE_TYPE,
-      version: MESSAGE_VERSION,
-      messageId,
-    },
-    PASSPORT_ORIGIN,
-  )
-}
-
-function callbackUrl(outcome: PassportOutcome) {
-  const url = new URL(window.location.href)
-  if (url.protocol !== 'https:') {
-    throw new Error('Passport callbacks require HTTPS. Start this template with `npm run dev`.')
-  }
-
+function callbackUrl(baseUrl: URL, outcome: PassportOutcome) {
+  const url = new URL(baseUrl)
   url.search = ''
   url.hash = ''
-  url.searchParams.set('passport', outcome)
+  url.searchParams.set(CALLBACK_PARAMETER, outcome)
   return url.href
 }
 

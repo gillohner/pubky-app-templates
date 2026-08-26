@@ -8,8 +8,8 @@ This template focuses on Pubky’s core building blocks. The included vanilla HT
 
 ## What's Included
 
-- Grant-based sign-in through a popup at `https://passport.staging.pubky.app`, including HTTPS outcome callbacks and the Passport `#d` authorization fragment.
-- Pubky Ring sign-in with the same generated request through a QR code or authorization link.
+- Grant-based Pubky Ring sign-in with a QR code, authorization link, and copy-to-clipboard action.
+- Optional browser-based Passport sign-in using a popup and the Passport `#d` authorization fragment.
 - A development-only authentication shortcut that removes sign-in friction on a local testnet. It requires `signup_mode = "open"` and is not intended as a pattern for production apps.
 - Session persistence across page reloads via the SDK browser session store, plus sign out.
 - File storage helpers under a configured path on the user’s Homeserver.
@@ -33,9 +33,8 @@ npm install
 npm run dev
 ```
 
-Use **Open Passport popup** to authorize an app session with the staging Pubky Passport instance,
-or use **Open in [Pubky Ring](https://pubkyring.app/)** to send the same request to Ring. For local
-testnet development, the [Pubky Ring Simulator](https://simulator.pubkyring.app) can
+Use **Open in [Pubky Ring](https://pubkyring.app/)** to authorize an app session. For local testnet
+development, the [Pubky Ring Simulator](https://simulator.pubkyring.app) can
 approve sign-in requests. With `vite dev` and `VITE_PUBKY_TESTNET=true`, **New identity** provides a
 development auth shortcut; the homeserver must run with `signup_mode = "open"`.
 
@@ -44,26 +43,37 @@ For complete local Homeserver, testnet, and authentication setup, follow the [Pu
 The hosted GitHub Pages builds are available for
 [mainnet](https://pubky.github.io/pubky-app-templates/mainnet/basic-pubky-app/) and a
 [local testnet](https://pubky.github.io/pubky-app-templates/testnet/basic-pubky-app/). Both are
-production builds; use the mainnet build for staging Passport integration testing.
+production builds. The mainnet build enables the optional staging Passport integration.
 
-## Staging Passport integration
+## Optional Passport Integration
 
-The template starts a grant auth flow with same-origin HTTPS callbacks for success, error, and
-cancellation. It then wraps the SDK-generated request for Passport like this:
+Set `VITE_PASSPORT_ORIGIN` to add **Open Passport popup** and **Copy Passport URL** without changing
+the standard Pubky grant flow:
+
+```dotenv
+VITE_PASSPORT_ORIGIN=https://passport.staging.pubky.app
+```
+
+For local testing, place the setting in an ignored `.env.local` file before starting Vite.
+
+The adapter wraps the SDK-generated request for Passport like this:
 
 ```ts
 const passportUrl = `https://passport.staging.pubky.app/authorize#d=${encodeURIComponent(flow.authorizationUrl)}`
 ```
 
-**Open Passport popup** opens that URL with an opener. On completion, the app validates Passport's
-origin and message shape, acknowledges the outcome message, and lets Passport close the popup. If
-the opener handoff is unavailable, each callback also works as a normal HTTPS navigation back to
-the app. **Copy Passport URL** exposes the exact generated `#d` URL for focused parser testing;
-treat it as a secret because the embedded Pubky authorization request contains auth material.
+On HTTPS deployments, the SDK request includes same-origin success, error, and cancellation
+callbacks. The optional popup adapter validates Passport's origin, message version, and exact popup
+source before acknowledging an outcome. These messages improve popup UX only: the app establishes
+a session exclusively from the SDK's encrypted relay approval.
 
-Local callback testing requires HTTPS. `npm run dev` uses Vite's basic SSL plugin and may require
-accepting the local development certificate once in the browser. The GitHub Pages builds are
-already served over HTTPS.
+On an HTTP development origin, Passport still opens and successful authentication still completes
+through the relay, but callback metadata is omitted because Passport accepts only HTTPS callbacks.
+This makes LAN testing possible with `npm run dev -- --host 0.0.0.0`; use a deployed HTTPS build to
+exercise callback outcomes.
+
+**Copy Passport URL** exposes the exact generated `#d` URL for focused parser testing. Treat it as a
+secret because the embedded Pubky authorization request contains auth material.
 
 ## App Settings
 
@@ -71,11 +81,13 @@ App-specific configuration lives in `src/config.ts`:
 
 ```ts
 export const APP_CLIENT_ID = 'template'
+export const APP_NAME = 'Basic Pubky App'
 export const APP_PATH = `/pub/${APP_CLIENT_ID}/`
 export const APP_CAPABILITIES = `${APP_PATH}:rw`
 ```
 
-Change `APP_CLIENT_ID` first when starting a real app; the path and capabilities are derived from it. The file also centralizes testnet and relay settings.
+Change `APP_CLIENT_ID` and `APP_NAME` first when starting a real app; the path and capabilities are
+derived from the client ID. The file also centralizes testnet, relay, and optional Passport settings.
 
 Set `VITE_PUBKY_STORAGE_NAMESPACE` when multiple builds share an origin and should keep their saved
 sessions separate.
