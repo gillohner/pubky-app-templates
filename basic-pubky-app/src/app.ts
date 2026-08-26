@@ -6,8 +6,8 @@ import {
   renderRingSigninQr,
   updateAuthorizeLink,
   updateCopyButton,
-  updateRingPanel,
-  type RingSigninState,
+  updateSigninPanel,
+  type SigninState,
 } from './auth-ui'
 import { startAppEventStream, type AppEvent, type AppEventStream } from './events'
 import { eventStreamPanelHtml, updateEventList, updateEventStreamToggle } from './events-ui'
@@ -21,20 +21,22 @@ import {
   statusMessage,
 } from './html'
 import {
-  acknowledgePassportOutcome,
+  closePassportPopup,
+  hasPassportIntegration,
+  openPassportPopup,
   readCallbackOutcome,
-  readPassportOutcomeMessage,
+  takePassportOutcome,
   type PassportOutcome,
 } from './passport'
 import {
-  isRingAuthCanceled,
-  isRingAuthExpired,
+  isAuthCanceled,
+  isAuthExpired,
   restoreSavedSession,
   saveSession,
   signOut,
   signupDevelopmentUser,
-  startRingAuthFlow,
-  type RingAuthFlow,
+  startAuthFlow,
+  type AppAuthFlow,
 } from './pubky'
 import { deleteFile, filePath, listFiles, saveFile, type AppFile } from './storage'
 
@@ -45,9 +47,8 @@ interface State {
   notice?: string
   noticePath?: string
   files: AppFile[]
-  passportPopup?: Window | null
-  ringAuthFlow?: RingAuthFlow
-  ringSignin: RingSigninState
+  authFlow?: AppAuthFlow
+  signin: SigninState
   session?: Session
   stopEventStream?: () => Promise<void>
   eventStreamEvents: AppEvent[]
@@ -56,18 +57,19 @@ interface State {
 const state: State = {
   eventStreamEvents: [],
   files: [],
-  ringSignin: {},
+  signin: {},
 }
 
 let app: HTMLElement
+const passportEnabled = hasPassportIntegration()
 
 export function start(root: HTMLElement) {
   app = root
   app.addEventListener('click', handleClick)
   app.addEventListener('submit', handleSubmit)
-  window.addEventListener('message', handlePassportMessage)
+  if (passportEnabled) window.addEventListener('message', handlePassportMessage)
 
-  const callbackOutcome = readCallbackOutcome()
+  const callbackOutcome = passportEnabled ? readCallbackOutcome() : undefined
   if (callbackOutcome) setPassportOutcome(callbackOutcome)
   mount()
   void init()
@@ -81,7 +83,7 @@ async function init() {
     }
   })
 
-  if (!state.session) await refreshRingSignin(Boolean(state.error))
+  if (!state.session) await refreshSignin(Boolean(state.error))
 }
 
 function mount() {
@@ -94,12 +96,12 @@ function mount() {
         ${session ? signedInHeader(session) : ''}
       </header>
       <div id="status">${statusHtml()}</div>
-      <div id="view">${session ? signedInViewHtml() : authViewHtml(state.ringSignin, state.busy)}</div>
+      <div id="view">${session ? signedInViewHtml() : authViewHtml(state.signin, state.busy)}</div>
       <footer class="app-footer">Built with <a href="https://www.npmjs.com/package/@synonymdev/pubky">Pubky SDK</a> v${pubkySdkVersion}</footer>
     </main>
   `
 
-  void renderRingSigninQr(state.ringSignin)
+  void renderRingSigninQr(state.signin)
 }
 
 function signedInHeader(session: Session) {
@@ -135,13 +137,13 @@ function updateStatus() {
 }
 
 function canUseAuthorizationUrl() {
-  const { authorizationUrl, expired, loading } = state.ringSignin
+  const { authorizationUrl, expired, loading } = state.signin
   return !state.busy && Boolean(authorizationUrl) && !loading && !expired
 }
 
 function syncControls() {
   const busy = Boolean(state.busy)
-  const loading = Boolean(state.ringSignin.loading)
+  const loading = Boolean(state.signin.loading)
   const canUse = canUseAuthorizationUrl()
 
   for (const button of app.querySelectorAll('button')) {
@@ -153,7 +155,7 @@ function syncControls() {
         button.disabled = !canUse
         break
       case 'open-passport':
-        button.disabled = !canUse || !state.ringSignin.passportAuthorizationUrl
+        button.disabled = !canUse || !state.signin.passportAuthorizationUrl
         break
       default:
         button.disabled = busy
@@ -161,7 +163,7 @@ function syncControls() {
     }
   }
 
-  updateAuthorizeLink(canUse, state.ringSignin.authorizationUrl)
+  updateAuthorizeLink(canUse, state.signin.authorizationUrl)
 }
 
 function handleClick(event: MouseEvent) {
@@ -189,7 +191,7 @@ function handleClick(event: MouseEvent) {
 
   switch (button.id) {
     case 'refresh-ring-signin':
-      void refreshRingSignin()
+      void refreshSignin()
       break
     case 'copy-authorization-url':
       void handleCopyAuthorizationUrl()
@@ -222,87 +224,90 @@ function handleSubmit(event: SubmitEvent) {
   if (form.id === 'file-form') void handleSaveFile(form)
 }
 
-async function refreshRingSignin(preserveError = false) {
-  const token = Symbol('ring-signin')
-  cancelRingSignin()
+async function refreshSignin(preserveError = false) {
+  const token = Symbol('signin')
+  cancelSignin()
 
-  state.ringSignin = {
+  state.signin = {
     loading: true,
     token,
   }
   if (!preserveError) state.error = undefined
   updateStatus()
-  updateRingPanel(state.ringSignin, state.busy)
+  updateSigninPanel(state.signin, state.busy)
   syncControls()
 
   try {
-    const flow = await startRingAuthFlow()
-    state.ringAuthFlow = flow
+    const flow = await startAuthFlow()
+    state.authFlow = flow
 
-    if (!isActiveRingSignin(token)) {
+    if (!isActiveSignin(token)) {
       flow.cancel()
       return
     }
 
-    state.ringSignin = {
+    state.signin = {
       authorizationUrl: flow.authorizationUrl,
       passportAuthorizationUrl: flow.passportAuthorizationUrl,
       token,
     }
-    updateRingPanel(state.ringSignin, state.busy)
+    updateSigninPanel(state.signin, state.busy)
     syncControls()
 
-    void handleRingApproval(flow, token)
+    void handleApproval(flow, token)
   } catch (error) {
-    if (!isActiveRingSignin(token)) return
+    if (!isActiveSignin(token)) return
 
-    state.ringAuthFlow = undefined
-    state.ringSignin = {}
+    state.authFlow = undefined
+    state.signin = {}
     setError(error)
     updateStatus()
-    updateRingPanel(state.ringSignin, state.busy)
+    updateSigninPanel(state.signin, state.busy)
     syncControls()
   }
 }
 
-async function handleRingApproval(flow: RingAuthFlow, token: symbol) {
+async function handleApproval(flow: AppAuthFlow, token: symbol) {
   try {
     const session = await flow.awaitApproval
-    if (!isActiveRingSignin(token)) return
+    if (!isActiveSignin(token)) return
 
-    state.ringAuthFlow = undefined
-    await run('Completing Pubky Ring sign-in...', async () => {
+    state.authFlow = undefined
+    await run('Completing Pubky sign-in...', async () => {
       await saveSession(session)
-      await activateSession(session, 'Signed in with Pubky Ring.')
+      await activateSession(session, 'Signed in with Pubky.')
     })
   } catch (error) {
-    if (isRingAuthCanceled(error) || !isActiveRingSignin(token)) return
+    if (isAuthCanceled(error) || !isActiveSignin(token)) return
 
-    state.ringAuthFlow = undefined
+    state.authFlow = undefined
     closePassportPopup()
-    state.ringSignin = isRingAuthExpired(error) ? { expired: true, token } : {}
+    state.signin = isAuthExpired(error) ? { expired: true, token } : {}
     setError(error)
     updateStatus()
-    updateRingPanel(state.ringSignin, state.busy)
+    updateSigninPanel(state.signin, state.busy)
     syncControls()
   }
 }
 
 async function handleCopyAuthorizationUrl() {
-  const authorizationUrl = state.ringSignin.passportAuthorizationUrl
-  if (!authorizationUrl || state.ringSignin.expired) return
+  const authorizationUrl = copyableAuthorizationUrl()
+  if (!authorizationUrl || state.signin.expired) return
+  const copiesPassportUrl = authorizationUrl === state.signin.passportAuthorizationUrl
 
   try {
     await copyTextToClipboard(authorizationUrl)
-    state.ringSignin.copied = true
-    setNotice('Passport #d authorization URL copied.')
+    state.signin.copied = true
+    setNotice(
+      copiesPassportUrl ? 'Passport #d authorization URL copied.' : 'Authorization URL copied.',
+    )
     updateStatus()
-    updateCopyButton(true)
+    updateCopyButton(true, copiesPassportUrl)
 
     window.setTimeout(() => {
-      if (state.ringSignin.passportAuthorizationUrl !== authorizationUrl) return
-      state.ringSignin.copied = false
-      updateCopyButton(false)
+      if (copyableAuthorizationUrl() !== authorizationUrl) return
+      state.signin.copied = false
+      updateCopyButton(false, copiesPassportUrl)
     }, 2200)
   } catch (error) {
     setError(error)
@@ -311,60 +316,45 @@ async function handleCopyAuthorizationUrl() {
 }
 
 function handleOpenPassport() {
-  const authorizationUrl = state.ringSignin.passportAuthorizationUrl
-  if (!authorizationUrl || state.ringSignin.expired) return
+  const authorizationUrl = state.signin.passportAuthorizationUrl
+  if (!authorizationUrl || state.signin.expired) return
 
-  const width = 520
-  const height = 760
-  const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
-  const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
-  const popup = window.open(
-    authorizationUrl,
-    'pubky-passport-authorization',
-    `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
-  )
-
-  if (!popup) {
+  if (!openPassportPopup(authorizationUrl)) {
     setError(new Error('Passport popup was blocked. Allow popups for this site and try again.'))
     updateStatus()
     return
   }
 
-  state.passportPopup = popup
-  popup.focus()
   setNotice('Passport opened. Complete the authorization in the popup.')
   updateStatus()
 }
 
 function handlePassportMessage(event: MessageEvent) {
-  const popup = state.passportPopup
-  const message = readPassportOutcomeMessage(event, popup)
-  if (!message || !popup) return
-
+  let outcome: PassportOutcome | undefined
   try {
-    acknowledgePassportOutcome(popup, message.messageId)
+    outcome = takePassportOutcome(event)
   } catch (error) {
     setError(error)
     updateStatus()
     return
   }
+  if (!outcome) return
 
-  state.passportPopup = undefined
-  setPassportOutcome(message.outcome)
+  setPassportOutcome(outcome)
   updateStatus()
 
-  if (message.outcome !== 'success') {
-    void refreshRingSignin(true)
+  if (outcome !== 'success') {
+    void refreshSignin(true)
   }
 }
 
 function setPassportOutcome(outcome: PassportOutcome) {
   switch (outcome) {
     case 'success':
-      setNotice('Passport approved the request. Completing the Pubky session...')
+      setNotice('Passport reported success. Waiting for verified Pubky relay approval...')
       break
     case 'error':
-      setError(new Error('Passport could not approve the authorization request.'))
+      setError(new Error('Passport reported that it could not approve the request.'))
       break
     case 'cancel':
       setNotice('Passport authorization was cancelled.')
@@ -429,7 +419,7 @@ async function handleSignOut() {
     setNotice('Signed out.')
   })
 
-  if (!state.session) await refreshRingSignin()
+  if (!state.session) await refreshSignin()
 }
 
 async function toggleEventStream() {
@@ -488,32 +478,26 @@ async function refreshFiles() {
 }
 
 async function activateSession(session: Session, notice: string) {
-  cancelRingSignin()
-  state.ringSignin = {}
+  cancelSignin()
+  state.signin = {}
   state.session = session
   setNotice(notice)
   await refreshFiles()
 }
 
-function cancelRingSignin() {
-  const flow = state.ringAuthFlow
-  state.ringAuthFlow = undefined
+function cancelSignin() {
+  const flow = state.authFlow
+  state.authFlow = undefined
   closePassportPopup()
   flow?.cancel()
 }
 
-function closePassportPopup() {
-  const popup = state.passportPopup
-  state.passportPopup = undefined
-  try {
-    if (popup && !popup.closed) popup.close()
-  } catch {
-    // Popup cleanup is best effort when the cross-origin window is unavailable.
-  }
+function copyableAuthorizationUrl() {
+  return state.signin.passportAuthorizationUrl ?? state.signin.authorizationUrl
 }
 
-function isActiveRingSignin(token: symbol) {
-  return state.ringSignin.token === token
+function isActiveSignin(token: symbol) {
+  return state.signin.token === token
 }
 
 function setNotice(notice: string, path?: string) {

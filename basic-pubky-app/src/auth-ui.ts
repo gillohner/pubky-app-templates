@@ -2,7 +2,7 @@ import { toCanvas } from 'qrcode'
 import { DEVELOPMENT_SIGNUP_HOMESERVER, SHOW_DEVELOPMENT_SIGNUP } from './config'
 import { disabledAttr, escapeHtml } from './html'
 
-export interface RingSigninState {
+export interface SigninState {
   authorizationUrl?: string
   passportAuthorizationUrl?: string
   copied?: boolean
@@ -14,25 +14,25 @@ export interface RingSigninState {
 const RING_QR_SIZE = 220
 const AUTHORIZE_LINK_ID = 'authorize-ring'
 
-export function authViewHtml(ringSignin: RingSigninState, busy?: string) {
+export function authViewHtml(signin: SigninState, busy?: string) {
   return `
     <section class="auth-grid ${SHOW_DEVELOPMENT_SIGNUP ? '' : 'ring-only'}">
-      ${ringPanelHtml(ringSignin, busy)}
+      ${signinPanelHtml(signin, busy)}
       ${SHOW_DEVELOPMENT_SIGNUP ? newIdentityPanel(busy) : ''}
     </section>
   `
 }
 
-export function updateRingPanel(ringSignin: RingSigninState, busy?: string) {
-  const panel = document.querySelector('#ring-panel')
+export function updateSigninPanel(signin: SigninState, busy?: string) {
+  const panel = document.querySelector('#signin-panel')
   if (!panel) return
-  panel.innerHTML = ringPanelBody(ringSignin, busy)
-  void renderRingSigninQr(ringSignin)
+  panel.innerHTML = signinPanelBody(signin, busy)
+  void renderRingSigninQr(signin)
 }
 
-export function updateCopyButton(copied: boolean) {
+export function updateCopyButton(copied: boolean, copiesPassportUrl: boolean) {
   const button = document.querySelector('#copy-authorization-url')
-  if (button) button.textContent = copied ? 'Copied' : 'Copy Passport URL'
+  if (button) button.textContent = copyButtonLabel(copied, copiesPassportUrl)
 }
 
 export function updateAuthorizeLink(canUse: boolean, authorizationUrl?: string) {
@@ -53,10 +53,10 @@ export function isAuthorizeRingLink(element: Element) {
   return Boolean(element.closest(`#${AUTHORIZE_LINK_ID}`))
 }
 
-export async function renderRingSigninQr(ringSignin: RingSigninState) {
+export async function renderRingSigninQr(signin: SigninState) {
   const canvas = document.querySelector<HTMLCanvasElement>('#ring-signin-qr')
-  const authorizationUrl = ringSignin.authorizationUrl
-  if (!canvas || !authorizationUrl || ringSignin.expired) return
+  const authorizationUrl = signin.authorizationUrl
+  if (!canvas || !authorizationUrl || signin.expired) return
 
   try {
     await toCanvas(canvas, authorizationUrl, {
@@ -73,20 +73,21 @@ export async function renderRingSigninQr(ringSignin: RingSigninState) {
   }
 }
 
-function ringPanelHtml(ringSignin: RingSigninState, busy?: string) {
-  return `<section id="ring-panel" class="panel">${ringPanelBody(ringSignin, busy)}</section>`
+function signinPanelHtml(signin: SigninState, busy?: string) {
+  return `<section id="signin-panel" class="panel">${signinPanelBody(signin, busy)}</section>`
 }
 
-function ringPanelBody(ringSignin: RingSigninState, busy?: string) {
-  const { authorizationUrl, copied, expired, loading } = ringSignin
+function signinPanelBody(signin: SigninState, busy?: string) {
+  const { authorizationUrl, copied, expired, loading, passportAuthorizationUrl } = signin
   const isBusy = Boolean(busy)
   const canUseAuthorizationUrl = !isBusy && Boolean(authorizationUrl) && !loading && !expired
+  const hasPassport = Boolean(passportAuthorizationUrl)
 
   return `
     <div class="section-header">
       <div>
         <h2>Sign in with Pubky</h2>
-        <p class="muted">Use staging Passport in a popup, or approve the same request with Pubky Ring.</p>
+        <p class="muted">${hasPassport ? 'Use Passport in a popup, or approve the same request with Pubky Ring.' : 'Approve the request with Pubky Ring.'}</p>
       </div>
       <button id="refresh-ring-signin" type="button" ${disabledAttr(isBusy || Boolean(loading))}>
         ${expired ? 'New link' : 'Refresh'}
@@ -94,19 +95,31 @@ function ringPanelBody(ringSignin: RingSigninState, busy?: string) {
     </div>
     <div class="ring-signin">
       <div class="qr-frame">
-        ${ringQrSlot(ringSignin)}
+        ${ringQrSlot(signin)}
       </div>
-      <div class="ring-actions">
-        <button id="open-passport" class="primary" type="button" ${disabledAttr(!canUseAuthorizationUrl)}>
-          Open Passport popup
-        </button>
+      <div class="ring-actions ${hasPassport ? 'with-passport' : ''}">
+        ${passportButtonHtml(hasPassport, canUseAuthorizationUrl)}
         ${authorizeLinkHtml(canUseAuthorizationUrl, authorizationUrl)}
         <button id="copy-authorization-url" type="button" ${disabledAttr(!canUseAuthorizationUrl)}>
-          ${copied ? 'Copied' : 'Copy Passport URL'}
+          ${copyButtonLabel(Boolean(copied), hasPassport)}
         </button>
       </div>
     </div>
   `
+}
+
+function passportButtonHtml(hasPassport: boolean, canUse: boolean) {
+  if (!hasPassport) return ''
+  return `
+    <button id="open-passport" class="primary" type="button" ${disabledAttr(!canUse)}>
+      Open Passport popup
+    </button>
+  `
+}
+
+function copyButtonLabel(copied: boolean, copiesPassportUrl: boolean) {
+  if (copied) return 'Copied'
+  return copiesPassportUrl ? 'Copy Passport URL' : 'Copy link'
 }
 
 function authorizeLinkHtml(canUse: boolean, authorizationUrl: string | undefined) {
@@ -117,8 +130,8 @@ function authorizeLinkHtml(canUse: boolean, authorizationUrl: string | undefined
   return `<a id="${AUTHORIZE_LINK_ID}" class="button-link" aria-disabled="true">Open in Pubky Ring</a>`
 }
 
-function ringQrSlot(ringSignin: RingSigninState) {
-  const { authorizationUrl, expired, loading } = ringSignin
+function ringQrSlot(signin: SigninState) {
+  const { authorizationUrl, expired, loading } = signin
 
   if (loading) {
     return ringQrPlaceholder(`

@@ -13,16 +13,16 @@ import { createPassportAuthorizationUrl, createPassportCallbacks } from './passp
 const SESSION_KEY = STORAGE_NAMESPACE
   ? `${STORAGE_NAMESPACE}:${APP_CLIENT_ID}:session`
   : `${APP_CLIENT_ID}:session`
-const RING_AUTH_CANCELED_ERROR_NAME = 'RingAuthCanceled'
-const RING_AUTH_EXPIRED_ERROR_NAME = 'RingAuthExpired'
+const AUTH_CANCELED_ERROR_NAME = 'AuthCanceled'
+const AUTH_EXPIRED_ERROR_NAME = 'AuthExpired'
 const CLOSED_SIGNUP_MESSAGE =
   'This homeserver does not allow open signup. Start it with \'signup_mode = "open"\' for creating new identities.'
 
 export const pubky = IS_TESTNET ? Pubky.testnet(TESTNET_HOST) : new Pubky()
 
-export interface RingAuthFlow {
+export interface AppAuthFlow {
   authorizationUrl: string
-  passportAuthorizationUrl: string
+  passportAuthorizationUrl?: string
   awaitApproval: Promise<Session>
   cancel: () => void
 }
@@ -40,13 +40,14 @@ export async function signupDevelopmentUser(homeserver: string) {
   return signer.signin(APP_CLIENT_ID)
 }
 
-export async function startRingAuthFlow(): Promise<RingAuthFlow> {
+export async function startAuthFlow(): Promise<AppAuthFlow> {
+  const xCallback = createPassportCallbacks()
   const flow = await pubky.startGrantAuthFlow(APP_CAPABILITIES, AuthFlowKind.signin(), {
     clientId: APP_CLIENT_ID,
     relay: HTTP_RELAY,
-    xCallback: createPassportCallbacks(),
+    ...(xCallback ? { xCallback } : {}),
   })
-  const approval = awaitRingApproval(flow)
+  const approval = awaitAuthApproval(flow)
 
   return {
     authorizationUrl: flow.authorizationUrl,
@@ -83,15 +84,15 @@ export async function signOut(session: Session) {
   await forgetSavedSession(savedId)
 }
 
-export function isRingAuthCanceled(error: unknown) {
-  return isErrorNamed(error, RING_AUTH_CANCELED_ERROR_NAME)
+export function isAuthCanceled(error: unknown) {
+  return isErrorNamed(error, AUTH_CANCELED_ERROR_NAME)
 }
 
-export function isRingAuthExpired(error: unknown) {
-  return isErrorNamed(error, RING_AUTH_EXPIRED_ERROR_NAME)
+export function isAuthExpired(error: unknown) {
+  return isErrorNamed(error, AUTH_EXPIRED_ERROR_NAME)
 }
 
-function awaitRingApproval(flow: GrantAuthFlow) {
+function awaitAuthApproval(flow: GrantAuthFlow) {
   let canceled = false
   let freed = false
 
@@ -110,11 +111,11 @@ function awaitRingApproval(flow: GrantAuthFlow) {
   const awaitApproval = (async () => {
     try {
       const session = await flow.awaitApproval()
-      if (canceled) throw ringAuthCanceledError()
+      if (canceled) throw authCanceledError()
       return session
     } catch (error) {
-      if (canceled) throw ringAuthCanceledError()
-      if (isExpiredAuthError(error)) throw ringAuthExpiredError()
+      if (canceled) throw authCanceledError()
+      if (isExpiredAuthError(error)) throw authExpiredError()
       throw error
     }
   })()
@@ -199,14 +200,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function ringAuthCanceledError() {
-  const error = new Error('Pubky Ring sign-in canceled')
-  error.name = RING_AUTH_CANCELED_ERROR_NAME
+function authCanceledError() {
+  const error = new Error('Pubky sign-in canceled')
+  error.name = AUTH_CANCELED_ERROR_NAME
   return error
 }
 
-function ringAuthExpiredError() {
-  const error = new Error('Pubky Ring sign-in link expired. Generate a fresh link and try again.')
-  error.name = RING_AUTH_EXPIRED_ERROR_NAME
+function authExpiredError() {
+  const error = new Error('Pubky sign-in link expired. Generate a fresh link and try again.')
+  error.name = AUTH_EXPIRED_ERROR_NAME
   return error
 }

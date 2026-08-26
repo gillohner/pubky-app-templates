@@ -135,8 +135,10 @@ textarea { resize: vertical; }
 
 .ring-actions {
   width: 100%;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+
+.ring-actions.with-passport { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .spinner {
   width: 2rem;
@@ -220,7 +222,8 @@ textarea { resize: vertical; }
 
   .auth-grid,
   .grid,
-  .ring-actions {
+  .ring-actions,
+  .ring-actions.with-passport {
     grid-template-columns: 1fr;
   }
 
