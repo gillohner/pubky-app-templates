@@ -319,13 +319,18 @@ function handleOpenPassport() {
   const authorizationUrl = state.signin.passportAuthorizationUrl
   if (!authorizationUrl || state.signin.expired) return
 
-  if (!openPassportPopup(authorizationUrl)) {
+  if (!openPassportPopup(authorizationUrl, handlePassportPopupClosed)) {
     setError(new Error('Passport popup was blocked. Allow popups for this site and try again.'))
     updateStatus()
     return
   }
 
   setNotice('Passport opened. Complete the authorization in the popup.')
+  updateStatus()
+}
+
+function handlePassportPopupClosed() {
+  setError(new Error('Passport popup was closed before authorization completed.'))
   updateStatus()
 }
 

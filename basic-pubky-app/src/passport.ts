@@ -10,6 +10,7 @@ const CALLBACK_PARAMETER = 'passport'
 const passportOrigin = PASSPORT_ORIGIN ? new URL(PASSPORT_ORIGIN).origin : undefined
 
 let popup: Window | null | undefined
+let popupCloseTimer: number | undefined
 
 export function hasPassportIntegration() {
   return Boolean(passportOrigin)
@@ -33,11 +34,12 @@ export function createPassportAuthorizationUrl(pubkyAuthorizationUrl: string) {
   return `${passportOrigin}/authorize#d=${encodeURIComponent(pubkyAuthorizationUrl)}`
 }
 
-export function openPassportPopup(authorizationUrl: string) {
+export function openPassportPopup(authorizationUrl: string, onClose: () => void) {
   const width = 520
   const height = 760
   const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
   const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
+  clearPopupCloseTimer()
   popup = window.open(
     authorizationUrl,
     'pubky-passport-authorization',
@@ -46,6 +48,12 @@ export function openPassportPopup(authorizationUrl: string) {
 
   if (!popup) return false
   popup.focus()
+  popupCloseTimer = window.setInterval(() => {
+    if (!popup?.closed) return
+    popup = undefined
+    clearPopupCloseTimer()
+    onClose()
+  }, 500)
   return true
 }
 
@@ -62,17 +70,25 @@ export function takePassportOutcome(event: MessageEvent): PassportOutcome | unde
     passportOrigin,
   )
   popup = undefined
+  clearPopupCloseTimer()
   return message.outcome
 }
 
 export function closePassportPopup() {
   const activePopup = popup
   popup = undefined
+  clearPopupCloseTimer()
   try {
     if (activePopup && !activePopup.closed) activePopup.close()
   } catch {
     // Popup cleanup is best effort when the cross-origin window is unavailable.
   }
+}
+
+function clearPopupCloseTimer() {
+  if (popupCloseTimer === undefined) return
+  window.clearInterval(popupCloseTimer)
+  popupCloseTimer = undefined
 }
 
 /** Reads and removes a callback navigation hint; it never establishes authentication. */
