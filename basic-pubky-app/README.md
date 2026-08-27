@@ -81,13 +81,12 @@ App-specific configuration lives in `src/config.ts`:
 
 ```ts
 export const APP_CLIENT_ID = 'template'
-export const APP_NAME = 'Basic Pubky App'
 export const APP_PATH = `/pub/${APP_CLIENT_ID}/`
 export const APP_CAPABILITIES = `${APP_PATH}:rw`
 ```
 
-Change `APP_CLIENT_ID` and `APP_NAME` first when starting a real app; the path and capabilities are
-derived from the client ID. The file also centralizes testnet, relay, and optional Passport settings.
+Change `APP_CLIENT_ID` first when starting a real app; the path and capabilities are derived from
+the client ID. The file also centralizes testnet, relay, and optional Passport settings.
 
 Set `VITE_PUBKY_STORAGE_NAMESPACE` when multiple builds share an origin and should keep their saved
 sessions separate.
