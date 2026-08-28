@@ -55,11 +55,12 @@ export function isAuthorizeRingLink(element: Element) {
 
 export async function renderRingSigninQr(signin: SigninState) {
   const canvas = document.querySelector<HTMLCanvasElement>('#ring-signin-qr')
-  const authorizationUrl = signin.authorizationUrl
-  if (!canvas || !authorizationUrl || signin.expired) return
+  // Ring scans the raw Pubky auth request, never Passport's /authorize#d wrapper.
+  const ringAuthorizationUrl = signin.authorizationUrl
+  if (!canvas || !ringAuthorizationUrl || signin.expired) return
 
   try {
-    await toCanvas(canvas, authorizationUrl, {
+    await toCanvas(canvas, ringAuthorizationUrl, {
       errorCorrectionLevel: 'M',
       margin: 2,
       width: RING_QR_SIZE,

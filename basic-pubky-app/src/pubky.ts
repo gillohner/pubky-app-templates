@@ -21,6 +21,7 @@ const CLOSED_SIGNUP_MESSAGE =
 export const pubky = IS_TESTNET ? Pubky.testnet(TESTNET_HOST) : new Pubky()
 
 export interface AppAuthFlow {
+  attemptId: string
   authorizationUrl: string
   passportAuthorizationUrl?: string
   awaitApproval: Promise<Session>
@@ -41,15 +42,17 @@ export async function signupDevelopmentUser(homeserver: string) {
 }
 
 export async function startAuthFlow(): Promise<AppAuthFlow> {
-  const xCallback = createPassportCallbacks()
+  const attemptId = crypto.randomUUID()
+  const xCallback = createPassportCallbacks(attemptId)
   const flow = await pubky.startGrantAuthFlow(APP_CAPABILITIES, AuthFlowKind.signin(), {
     clientId: APP_CLIENT_ID,
     relay: HTTP_RELAY,
-    ...(xCallback ? { xCallback } : {}),
+    xCallback,
   })
   const approval = awaitAuthApproval(flow)
 
   return {
+    attemptId,
     authorizationUrl: flow.authorizationUrl,
     passportAuthorizationUrl: createPassportAuthorizationUrl(flow.authorizationUrl),
     awaitApproval: approval.awaitApproval,

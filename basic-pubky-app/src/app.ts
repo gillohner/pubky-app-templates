@@ -337,7 +337,7 @@ function handlePassportPopupClosed() {
 function handlePassportMessage(event: MessageEvent) {
   let outcome: PassportOutcome | undefined
   try {
-    outcome = takePassportOutcome(event)
+    outcome = takePassportOutcome(event, state.authFlow?.attemptId)
   } catch (error) {
     setError(error)
     updateStatus()
