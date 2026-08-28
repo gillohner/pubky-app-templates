@@ -47,7 +47,7 @@ export async function startAuthFlow(): Promise<AppAuthFlow> {
   const flow = await pubky.startGrantAuthFlow(APP_CAPABILITIES, AuthFlowKind.signin(), {
     clientId: APP_CLIENT_ID,
     relay: HTTP_RELAY,
-    xCallback,
+    ...(xCallback ? { xCallback } : {}),
   })
   const approval = awaitAuthApproval(flow)
 

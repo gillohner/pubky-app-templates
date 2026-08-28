@@ -63,15 +63,15 @@ const passportUrl = `https://passport.staging.pubky.app/authorize#d=${encodeURIC
 ```
 
 On HTTPS deployments, the SDK request includes same-origin success, error, and cancellation
-callbacks plus `xSource: 'Basic Pubky App'`. The optional popup adapter validates Passport's origin,
-message version, and exact popup source before acknowledging an outcome. Callback navigation is
-correlated to the active attempt before it is accepted. These messages improve popup UX only: the
-app establishes a session exclusively from the SDK's encrypted relay approval.
+callbacks. The optional popup adapter validates Passport's origin, message version, and exact popup
+source before acknowledging an outcome. Callback navigation is correlated to the active attempt
+before it is accepted. These messages improve popup UX only: the app establishes a session
+exclusively from the SDK's encrypted relay approval.
 
 On an HTTP development origin, Passport still opens and successful authentication still completes
 through the relay, but the three return callback URLs are omitted because Passport accepts only
-HTTPS callbacks. The friendly `xSource` remains present. This makes LAN testing possible with
-`npm run dev -- --host 0.0.0.0`; use a deployed HTTPS build to exercise callback outcomes.
+HTTPS callbacks. This makes LAN testing possible with `npm run dev -- --host 0.0.0.0`; use a
+deployed HTTPS build to exercise callback outcomes.
 
 **Copy Passport URL** exposes the exact generated `#d` URL for focused parser testing. Treat it as a
 secret because the embedded Pubky authorization request contains auth material.
@@ -87,14 +87,12 @@ App-specific configuration lives in `src/config.ts`:
 
 ```ts
 export const APP_CLIENT_ID = 'template'
-export const APP_NAME = 'Basic Pubky App'
 export const APP_PATH = `/pub/${APP_CLIENT_ID}/`
 export const APP_CAPABILITIES = `${APP_PATH}:rw`
 ```
 
-Change `APP_CLIENT_ID` and `APP_NAME` first when starting a real app. The path and capabilities are
-derived from the client ID; `APP_NAME` becomes the human-readable `xSource` shown by Passport and
-other compatible signers. The file also centralizes testnet, relay, and optional Passport settings.
+Change `APP_CLIENT_ID` first when starting a real app; the path and capabilities are derived from
+the client ID. The file also centralizes testnet, relay, and optional Passport settings.
 
 Set `VITE_PUBKY_STORAGE_NAMESPACE` when multiple builds share an origin and should keep their saved
 sessions separate.
