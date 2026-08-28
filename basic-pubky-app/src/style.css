@@ -91,20 +91,36 @@ textarea { resize: vertical; }
 .file-list,
 .event-list,
 .ring-signin,
-.ring-actions {
+.ring-actions,
+.passport-signin,
+.passport-actions {
   display: grid;
   gap: 1rem;
 }
 
-.auth-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.auth-grid.ring-only {
+.auth-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  align-items: stretch;
+}
+.auth-grid.single-card {
+  max-width: 520px;
+  margin-inline: auto;
   grid-template-columns: minmax(0, 520px);
-  justify-content: center;
 }
 .grid { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr); }
 .event-stream-panel { grid-column: 1 / -1; }
 
+.auth-card { display: flex; flex-direction: column; }
 .ring-signin { justify-items: center; }
+.ring-signin,
+.passport-signin { flex: 1; }
+.passport-signin { align-content: space-between; }
+.passport-summary {
+  padding: 1rem;
+  border-radius: 6px;
+  background: #f6f8fb;
+}
+.passport-summary p { margin: 0.5rem 0 0; }
 
 .qr-frame {
   display: grid;
@@ -138,7 +154,7 @@ textarea { resize: vertical; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.ring-actions.with-passport { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.passport-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .spinner {
   width: 2rem;
@@ -223,7 +239,7 @@ textarea { resize: vertical; }
   .auth-grid,
   .grid,
   .ring-actions,
-  .ring-actions.with-passport {
+  .passport-actions {
     grid-template-columns: 1fr;
   }
 

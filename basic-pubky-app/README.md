@@ -47,8 +47,8 @@ production builds. The mainnet build enables the optional staging Passport integ
 
 ## Optional Passport Integration
 
-Set `VITE_PASSPORT_ORIGIN` to add **Open Passport popup** and **Copy Passport URL** without changing
-the standard Pubky grant flow:
+Set `VITE_PASSPORT_ORIGIN` to add a separate **Sign in with Pubky Passport** card without changing
+the standard Pubky Ring card or grant flow:
 
 ```dotenv
 VITE_PASSPORT_ORIGIN=https://passport.staging.pubky.app
@@ -76,9 +76,10 @@ HTTPS callbacks. The friendly `xSource` remains present. This makes LAN testing 
 **Copy Passport URL** exposes the exact generated `#d` URL for focused parser testing. Treat it as a
 secret because the embedded Pubky authorization request contains auth material.
 
-The QR code and **Open in Pubky Ring** link always use the unwrapped `flow.authorizationUrl`.
-Passport's `/authorize#d=...` URL is only used by the Passport popup and copy action, so Ring can
-scan the QR as a normal Pubky auth request.
+The Ring card's QR code, **Authorize with Pubky Ring**, and **Copy link** actions always use the
+unwrapped `flow.authorizationUrl`. The Passport card alone uses Passport's `/authorize#d=...` URL
+for **Open Passport** and **Copy Passport URL**, so Ring can scan the QR as a normal Pubky auth
+request.
 
 ## App Settings
 

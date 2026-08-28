@@ -6,7 +6,8 @@ import {
   renderRingSigninQr,
   updateAuthorizeLink,
   updateCopyButton,
-  updateSigninPanel,
+  updateSigninView,
+  type AuthorizationUrlKind,
   type SigninState,
 } from './auth-ui'
 import { startAppEventStream, type AppEvent, type AppEventStream } from './events'
@@ -96,7 +97,7 @@ function mount() {
         ${session ? signedInHeader(session) : ''}
       </header>
       <div id="status">${statusHtml()}</div>
-      <div id="view">${session ? signedInViewHtml() : authViewHtml(state.signin, state.busy)}</div>
+      <div id="view">${session ? signedInViewHtml() : authViewHtml(state.signin, state.busy, passportEnabled)}</div>
       <footer class="app-footer">Built with <a href="https://www.npmjs.com/package/@synonymdev/pubky">Pubky SDK</a> v${pubkySdkVersion}</footer>
     </main>
   `
@@ -151,9 +152,10 @@ function syncControls() {
       case 'refresh-ring-signin':
         button.disabled = busy || loading
         break
-      case 'copy-authorization-url':
+      case 'copy-ring-authorization-url':
         button.disabled = !canUse
         break
+      case 'copy-passport-authorization-url':
       case 'open-passport':
         button.disabled = !canUse || !state.signin.passportAuthorizationUrl
         break
@@ -193,8 +195,11 @@ function handleClick(event: MouseEvent) {
     case 'refresh-ring-signin':
       void refreshSignin()
       break
-    case 'copy-authorization-url':
-      void handleCopyAuthorizationUrl()
+    case 'copy-ring-authorization-url':
+      void handleCopyAuthorizationUrl('ring')
+      break
+    case 'copy-passport-authorization-url':
+      void handleCopyAuthorizationUrl('passport')
       break
     case 'open-passport':
       handleOpenPassport()
@@ -234,7 +239,7 @@ async function refreshSignin(preserveError = false) {
   }
   if (!preserveError) state.error = undefined
   updateStatus()
-  updateSigninPanel(state.signin, state.busy)
+  updateSigninView(state.signin, state.busy, passportEnabled)
   syncControls()
 
   try {
@@ -251,7 +256,7 @@ async function refreshSignin(preserveError = false) {
       passportAuthorizationUrl: flow.passportAuthorizationUrl,
       token,
     }
-    updateSigninPanel(state.signin, state.busy)
+    updateSigninView(state.signin, state.busy, passportEnabled)
     syncControls()
 
     void handleApproval(flow, token)
@@ -262,7 +267,7 @@ async function refreshSignin(preserveError = false) {
     state.signin = {}
     setError(error)
     updateStatus()
-    updateSigninPanel(state.signin, state.busy)
+    updateSigninView(state.signin, state.busy, passportEnabled)
     syncControls()
   }
 }
@@ -285,29 +290,26 @@ async function handleApproval(flow: AppAuthFlow, token: symbol) {
     state.signin = isAuthExpired(error) ? { expired: true, token } : {}
     setError(error)
     updateStatus()
-    updateSigninPanel(state.signin, state.busy)
+    updateSigninView(state.signin, state.busy, passportEnabled)
     syncControls()
   }
 }
 
-async function handleCopyAuthorizationUrl() {
-  const authorizationUrl = copyableAuthorizationUrl()
+async function handleCopyAuthorizationUrl(kind: AuthorizationUrlKind) {
+  const authorizationUrl = authorizationUrlFor(kind)
   if (!authorizationUrl || state.signin.expired) return
-  const copiesPassportUrl = authorizationUrl === state.signin.passportAuthorizationUrl
 
   try {
     await copyTextToClipboard(authorizationUrl)
-    state.signin.copied = true
-    setNotice(
-      copiesPassportUrl ? 'Passport #d authorization URL copied.' : 'Authorization URL copied.',
-    )
+    setCopied(kind, true)
+    setNotice(kind === 'ring' ? 'Authorization URL copied.' : 'Passport URL copied.')
     updateStatus()
-    updateCopyButton(true, copiesPassportUrl)
+    updateCopyButton(kind, true)
 
     window.setTimeout(() => {
-      if (copyableAuthorizationUrl() !== authorizationUrl) return
-      state.signin.copied = false
-      updateCopyButton(false, copiesPassportUrl)
+      if (authorizationUrlFor(kind) !== authorizationUrl) return
+      setCopied(kind, false)
+      updateCopyButton(kind, false)
     }, 2200)
   } catch (error) {
     setError(error)
@@ -497,8 +499,13 @@ function cancelSignin() {
   flow?.cancel()
 }
 
-function copyableAuthorizationUrl() {
-  return state.signin.passportAuthorizationUrl ?? state.signin.authorizationUrl
+function authorizationUrlFor(kind: AuthorizationUrlKind) {
+  return kind === 'ring' ? state.signin.authorizationUrl : state.signin.passportAuthorizationUrl
+}
+
+function setCopied(kind: AuthorizationUrlKind, copied: boolean) {
+  if (kind === 'ring') state.signin.ringCopied = copied
+  else state.signin.passportCopied = copied
 }
 
 function isActiveSignin(token: symbol) {
