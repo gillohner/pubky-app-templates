@@ -1,5 +1,6 @@
 import type { Session } from '@synonymdev/pubky'
 import { version as pubkySdkVersion } from '@synonymdev/pubky/package.json'
+import { APP_NAME } from './config'
 import {
   isAuthorizeRingLink,
   authViewHtml,
@@ -94,7 +95,7 @@ function mount() {
   app.innerHTML = `
     <main class="app-shell">
       <header class="app-header">
-        <h1>Pubky App Template</h1>
+        <h1>${escapeHtml(APP_NAME)}</h1>
         ${session ? signedInHeader(session) : ''}
       </header>
       <div id="status">${statusHtml()}</div>

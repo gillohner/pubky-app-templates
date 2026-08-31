@@ -62,8 +62,9 @@ The adapter wraps the SDK-generated request for Passport like this:
 const passportUrl = `https://passport.staging.pubky.app/authorize#d=${encodeURIComponent(flow.authorizationUrl)}`
 ```
 
-On HTTPS deployments, the SDK request includes same-origin success, error, and cancellation
-callbacks. The optional popup adapter validates Passport's origin, message version, and exact popup
+The SDK request identifies the app as **Pubky App Template** through `xSource`. On HTTPS
+deployments, it also includes same-origin success, error, and cancellation callbacks. The optional
+popup adapter validates Passport's origin, message version, and exact popup
 source before acknowledging an outcome. Callback navigation is correlated to the active attempt
 before it is accepted. These messages improve popup UX only: the app establishes a session
 exclusively from the SDK's encrypted relay approval.

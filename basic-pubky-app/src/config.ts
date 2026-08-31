@@ -1,6 +1,7 @@
 import type { Capabilities } from '@synonymdev/pubky'
 
 export const APP_CLIENT_ID = 'template' as const
+export const APP_NAME = 'Pubky App Template' as const
 export const APP_PATH = `/pub/${APP_CLIENT_ID}/` as const
 export const APP_CAPABILITIES = `${APP_PATH}:rw` as Capabilities
 

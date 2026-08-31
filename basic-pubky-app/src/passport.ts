@@ -1,5 +1,5 @@
 import type { XCallbackParams } from '@synonymdev/pubky'
-import { PASSPORT_ORIGIN } from './config'
+import { APP_NAME, PASSPORT_ORIGIN } from './config'
 
 export type PassportOutcome = 'success' | 'error' | 'cancel'
 
@@ -23,9 +23,11 @@ export function hasPassportIntegration() {
 /** HTTPS callbacks improve popup UX; the SDK relay remains authoritative for authentication. */
 export function createPassportCallbacks(attemptId: string): XCallbackParams | undefined {
   const url = new URL(window.location.href)
-  if (!passportOrigin || url.protocol !== 'https:') return undefined
+  if (!passportOrigin) return undefined
+  if (url.protocol !== 'https:') return { xSource: APP_NAME }
 
   return {
+    xSource: APP_NAME,
     xSuccess: callbackUrl(url, attemptId, 'success'),
     xError: callbackUrl(url, attemptId, 'error'),
     xCancel: callbackUrl(url, attemptId, 'cancel'),
