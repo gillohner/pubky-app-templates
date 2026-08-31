@@ -77,7 +77,7 @@ deployed HTTPS build to exercise callback outcomes.
 secret because the embedded Pubky authorization request contains auth material.
 
 **Open local Passport** sends the same authorization request to
-`http://localhost:3000/authorize`, making it possible to test a locally running Passport without
+`https://localhost:3000/authorize`, making it possible to test a locally running Passport without
 changing `VITE_PASSPORT_ORIGIN`. The popup response is still checked against the exact origin that
 was opened.
 

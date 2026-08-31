@@ -9,7 +9,7 @@ const CALLBACK_MESSAGE_TYPE = 'basic-pubky-app.passport-return'
 const MESSAGE_VERSION = 1
 const CALLBACK_ATTEMPT_PARAMETER = 'attempt'
 const CALLBACK_OUTCOME_PARAMETER = 'outcome'
-const LOCAL_PASSPORT_ORIGIN = 'http://localhost:3000'
+const LOCAL_PASSPORT_ORIGIN = 'https://localhost:3000'
 const passportOrigin = PASSPORT_ORIGIN ? new URL(PASSPORT_ORIGIN).origin : undefined
 
 let popup: Window | null | undefined
