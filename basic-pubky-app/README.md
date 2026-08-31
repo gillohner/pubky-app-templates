@@ -76,6 +76,11 @@ deployed HTTPS build to exercise callback outcomes.
 **Copy Passport URL** exposes the exact generated `#d` URL for focused parser testing. Treat it as a
 secret because the embedded Pubky authorization request contains auth material.
 
+**Open local Passport** sends the same authorization request to
+`http://localhost:3000/authorize`, making it possible to test a locally running Passport without
+changing `VITE_PASSPORT_ORIGIN`. The popup response is still checked against the exact origin that
+was opened.
+
 The Ring card's QR code, **Authorize with Pubky Ring**, and **Copy link** actions always use the
 unwrapped `flow.authorizationUrl`. The Passport card alone uses Passport's `/authorize#d=...` URL
 for **Open Passport** and **Copy Passport URL**, so Ring can scan the QR as a normal Pubky auth

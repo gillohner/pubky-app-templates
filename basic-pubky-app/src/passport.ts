@@ -9,9 +9,11 @@ const CALLBACK_MESSAGE_TYPE = 'basic-pubky-app.passport-return'
 const MESSAGE_VERSION = 1
 const CALLBACK_ATTEMPT_PARAMETER = 'attempt'
 const CALLBACK_OUTCOME_PARAMETER = 'outcome'
+const LOCAL_PASSPORT_ORIGIN = 'http://localhost:3000'
 const passportOrigin = PASSPORT_ORIGIN ? new URL(PASSPORT_ORIGIN).origin : undefined
 
 let popup: Window | null | undefined
+let popupOrigin: string | undefined
 let popupCloseTimer: number | undefined
 
 export function hasPassportIntegration() {
@@ -35,23 +37,33 @@ export function createPassportAuthorizationUrl(pubkyAuthorizationUrl: string) {
   return `${passportOrigin}/authorize#d=${encodeURIComponent(pubkyAuthorizationUrl)}`
 }
 
+export function createLocalPassportAuthorizationUrl(authorizationUrl: string) {
+  const url = new URL(authorizationUrl)
+  return new URL(`${url.pathname}${url.search}${url.hash}`, LOCAL_PASSPORT_ORIGIN).href
+}
+
 export function openPassportPopup(authorizationUrl: string, onClose: () => void) {
   const width = 520
   const height = 760
   const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
   const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
   clearPopupCloseTimer()
+  popupOrigin = new URL(authorizationUrl).origin
   popup = window.open(
     authorizationUrl,
     'pubky-passport-authorization',
     `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
   )
 
-  if (!popup) return false
+  if (!popup) {
+    popupOrigin = undefined
+    return false
+  }
   popup.focus()
   popupCloseTimer = window.setInterval(() => {
     if (!popup?.closed) return
     popup = undefined
+    popupOrigin = undefined
     clearPopupCloseTimer()
     onClose()
   }, 500)
@@ -63,16 +75,17 @@ export function takePassportOutcome(
   expectedAttemptId: string | undefined,
 ): PassportOutcome | undefined {
   const message = parseOutcomeMessage(event)
-  if (message && popup && passportOrigin) {
+  if (message && popup && popupOrigin) {
     popup.postMessage(
       {
         type: ACKNOWLEDGEMENT_MESSAGE_TYPE,
         version: MESSAGE_VERSION,
         messageId: message.messageId,
       },
-      passportOrigin,
+      popupOrigin,
     )
     popup = undefined
+    popupOrigin = undefined
     clearPopupCloseTimer()
     return message.outcome
   }
@@ -86,6 +99,7 @@ export function takePassportOutcome(
 export function closePassportPopup() {
   const activePopup = popup
   popup = undefined
+  popupOrigin = undefined
   clearPopupCloseTimer()
   try {
     if (activePopup && !activePopup.closed) activePopup.close()
@@ -123,7 +137,7 @@ export function readCallbackOutcome(): PassportOutcome | undefined {
 }
 
 function parseOutcomeMessage(event: MessageEvent) {
-  if (event.origin !== passportOrigin || !popup || event.source !== popup) return undefined
+  if (event.origin !== popupOrigin || !popup || event.source !== popup) return undefined
   if (!isRecord(event.data)) return undefined
 
   const outcome = parseOutcome(event.data.outcome)

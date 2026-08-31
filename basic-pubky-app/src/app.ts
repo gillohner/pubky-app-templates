@@ -23,6 +23,7 @@ import {
 } from './html'
 import {
   closePassportPopup,
+  createLocalPassportAuthorizationUrl,
   hasPassportIntegration,
   openPassportPopup,
   readCallbackOutcome,
@@ -157,6 +158,7 @@ function syncControls() {
         break
       case 'copy-passport-authorization-url':
       case 'open-passport':
+      case 'open-local-passport':
         button.disabled = !canUse || !state.signin.passportAuthorizationUrl
         break
       default:
@@ -203,6 +205,9 @@ function handleClick(event: MouseEvent) {
       break
     case 'open-passport':
       handleOpenPassport()
+      break
+    case 'open-local-passport':
+      handleOpenPassport(true)
       break
     case 'sign-out':
       void handleSignOut()
@@ -317,8 +322,12 @@ async function handleCopyAuthorizationUrl(kind: AuthorizationUrlKind) {
   }
 }
 
-function handleOpenPassport() {
-  const authorizationUrl = state.signin.passportAuthorizationUrl
+function handleOpenPassport(useLocalPassport = false) {
+  const passportAuthorizationUrl = state.signin.passportAuthorizationUrl
+  const authorizationUrl =
+    passportAuthorizationUrl && useLocalPassport
+      ? createLocalPassportAuthorizationUrl(passportAuthorizationUrl)
+      : passportAuthorizationUrl
   if (!authorizationUrl || state.signin.expired) return
 
   if (!openPassportPopup(authorizationUrl, handlePassportPopupClosed)) {
@@ -327,7 +336,9 @@ function handleOpenPassport() {
     return
   }
 
-  setNotice('Passport opened. Complete the authorization in the popup.')
+  setNotice(
+    `${useLocalPassport ? 'Local Passport' : 'Passport'} opened. Complete the authorization in the popup.`,
+  )
   updateStatus()
 }
 

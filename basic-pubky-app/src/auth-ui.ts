@@ -143,6 +143,9 @@ function passportCardHtml(signin: SigninState, busy?: string) {
           <button id="open-passport" class="primary" type="button" ${disabledAttr(!canUse)}>
             Open Passport
           </button>
+          <button id="open-local-passport" type="button" ${disabledAttr(!canUse)}>
+            Open local Passport
+          </button>
           <button id="${COPY_PASSPORT_URL_ID}" type="button" ${disabledAttr(!canUse)}>
             ${passportCopied ? 'Copied' : copyButtonLabel('passport')}
           </button>
