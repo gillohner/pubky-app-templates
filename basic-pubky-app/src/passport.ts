@@ -25,11 +25,21 @@ const CALLBACK_ATTEMPT_PARAMETER = 'attempt'
 const CALLBACK_OUTCOME_PARAMETER = 'outcome'
 const POPUP_CLOSE_GRACE_MS = 1_000
 const POPUP_ACK_CLOSE_DELAY_MS = 100
+const ACKNOWLEDGEMENT_CACHE_MS = 3_000
+
+interface AcknowledgedOutcome {
+  popup: Window
+  origin: string
+  messageId: string
+  outcome: PassportOutcome
+}
 
 let popup: Window | null | undefined
 let popupOrigin: string | undefined
 let popupCloseTimer: number | undefined
 let popupCloseGraceTimer: number | undefined
+let acknowledgedOutcome: AcknowledgedOutcome | undefined
+let acknowledgementCacheTimer: number | undefined
 
 export function passportOrigin(settings: PassportSettings): string | undefined {
   switch (settings.location) {
@@ -102,17 +112,14 @@ export function takePassportOutcome(
   event: MessageEvent,
   expectedAttemptId: string | undefined,
 ): PassportOutcome | undefined {
+  if (acknowledgeDuplicateOutcome(event)) return undefined
+
   const message = parseOutcomeMessage(event)
   if (message && popup && popupOrigin) {
     const activePopup = popup
-    activePopup.postMessage(
-      {
-        type: ACKNOWLEDGEMENT_MESSAGE_TYPE,
-        version: MESSAGE_VERSION,
-        messageId: message.messageId,
-      },
-      popupOrigin,
-    )
+    const activeOrigin = popupOrigin
+    acknowledgeOutcome(activePopup, activeOrigin, message.messageId)
+    cacheAcknowledgedOutcome(activePopup, activeOrigin, message)
     popup = undefined
     popupOrigin = undefined
     clearPopupCloseTimer()
@@ -154,9 +161,10 @@ export function readCallbackOutcome(): PassportOutcome | undefined {
       window.location.origin,
     )
     window.close()
+    return outcome
   }
 
-  return outcome
+  return undefined
 }
 
 function clearPopupCloseTimer() {
@@ -169,6 +177,58 @@ function clearPopupCloseGraceTimer() {
   if (popupCloseGraceTimer === undefined) return
   window.clearTimeout(popupCloseGraceTimer)
   popupCloseGraceTimer = undefined
+}
+
+function acknowledgeDuplicateOutcome(event: MessageEvent) {
+  const acknowledged = acknowledgedOutcome
+  if (
+    !acknowledged ||
+    event.origin !== acknowledged.origin ||
+    event.source !== acknowledged.popup
+  ) {
+    return false
+  }
+  if (!isRecord(event.data)) return false
+
+  const outcome = parseOutcome(event.data.outcome)
+  if (
+    event.data.type !== OUTCOME_MESSAGE_TYPE ||
+    event.data.version !== MESSAGE_VERSION ||
+    event.data.messageId !== acknowledged.messageId ||
+    outcome !== acknowledged.outcome
+  ) {
+    return false
+  }
+
+  acknowledgeOutcome(acknowledged.popup, acknowledged.origin, acknowledged.messageId)
+  return true
+}
+
+function cacheAcknowledgedOutcome(
+  activePopup: Window,
+  origin: string,
+  message: { outcome: PassportOutcome; messageId: string },
+) {
+  if (acknowledgementCacheTimer !== undefined) {
+    window.clearTimeout(acknowledgementCacheTimer)
+  }
+
+  acknowledgedOutcome = { popup: activePopup, origin, ...message }
+  acknowledgementCacheTimer = window.setTimeout(() => {
+    acknowledgedOutcome = undefined
+    acknowledgementCacheTimer = undefined
+  }, ACKNOWLEDGEMENT_CACHE_MS)
+}
+
+function acknowledgeOutcome(activePopup: Window, origin: string, messageId: string) {
+  activePopup.postMessage(
+    {
+      type: ACKNOWLEDGEMENT_MESSAGE_TYPE,
+      version: MESSAGE_VERSION,
+      messageId,
+    },
+    origin,
+  )
 }
 
 function closePopupWindow(activePopup: Window) {

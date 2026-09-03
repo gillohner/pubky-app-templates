@@ -81,9 +81,11 @@ The popup keeps its opener channel so Passport can report an outcome directly. T
 the exact selected Passport origin, popup window, message type, version, outcome, and message ID
 before acknowledging the message. If direct messaging fails, Passport navigates to the matching
 callback; the callback page relays a same-origin message correlated to the flow's unpredictable
-attempt ID. Use custom Passport origins only when you trust them, because popup messaging requires
-an opener relationship. On an HTTP development origin, the SDK request contains `xSource` only,
-since Passport callbacks must be HTTPS.
+attempt ID. Popup messaging requires an opener relationship, which means the selected Passport
+page can navigate the app window while it is open. Treat the default deployment and every custom
+Passport origin as trusted; a compromised origin could replace the app with a phishing page. On an
+HTTP development origin, the SDK request contains `xSource` only, since Passport callbacks must be
+HTTPS.
 
 Success, error, and cancel messages are UI signals only. A success message keeps the flow polling;
 only the `Session` returned by the SDK relay authenticates the user. Error, cancellation, manual

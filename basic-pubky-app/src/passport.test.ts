@@ -87,7 +87,7 @@ describe('Passport popup', () => {
     }
     const open = vi.fn(() => popup)
     const clearInterval = vi.fn()
-    let finishAcknowledgement: (() => void) | undefined
+    const scheduledTimeouts = new Map<number, () => void>()
     vi.stubGlobal('window', {
       clearInterval,
       clearTimeout: vi.fn(),
@@ -98,9 +98,9 @@ describe('Passport popup', () => {
       screenX: 0,
       screenY: 0,
       setInterval: vi.fn(() => 7),
-      setTimeout: vi.fn((callback: () => void) => {
-        finishAcknowledgement = callback
-        return 8
+      setTimeout: vi.fn((callback: () => void, delay: number) => {
+        scheduledTimeouts.set(delay, callback)
+        return delay
       }),
     })
 
@@ -136,16 +136,19 @@ describe('Passport popup', () => {
     )
     expect(clearInterval).toHaveBeenCalledWith(7)
     expect(takePassportOutcome(message, 'attempt-123')).toBeUndefined()
+    expect(popup.postMessage).toHaveBeenCalledTimes(2)
     expect(popup.close).not.toHaveBeenCalled()
-    expect(finishAcknowledgement).toBeTypeOf('function')
-    finishAcknowledgement?.()
+    expect(scheduledTimeouts.get(100)).toBeTypeOf('function')
+    scheduledTimeouts.get(100)?.()
     expect(popup.close).toHaveBeenCalledOnce()
+    expect(scheduledTimeouts.get(3_000)).toBeTypeOf('function')
+    scheduledTimeouts.get(3_000)?.()
   })
 
-  it('rejects Passport messages from the wrong origin', () => {
+  it('binds Passport messages to the exact custom origin that was opened', () => {
     const popup = popupWindow()
     stubPopupHost(popup)
-    openPassportPopup(`${STAGING_PASSPORT_ORIGIN}/authorize#d=request`, vi.fn())
+    openPassportPopup('https://custom.passport.example/authorize#d=request', vi.fn())
 
     expect(
       takePassportOutcome(
@@ -156,7 +159,7 @@ describe('Passport popup', () => {
             outcome: 'success',
             messageId: 'message-123',
           },
-          origin: 'https://evil.example',
+          origin: STAGING_PASSPORT_ORIGIN,
           source: popup,
         } as unknown as MessageEvent,
         'attempt-123',
@@ -237,6 +240,18 @@ describe('Passport popup', () => {
       'https://app.example',
     )
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('scrubs but does not surface callback parameters without an opener', () => {
+    const replaceState = vi.fn()
+    vi.stubGlobal('window', {
+      history: { replaceState, state: null },
+      location: new URL('https://app.example/basic/?attempt=forged&outcome=success'),
+      opener: null,
+    })
+
+    expect(readCallbackOutcome()).toBeUndefined()
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/basic/')
   })
 })
 
