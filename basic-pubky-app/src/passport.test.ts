@@ -87,8 +87,10 @@ describe('Passport popup', () => {
     }
     const open = vi.fn(() => popup)
     const clearInterval = vi.fn()
+    let finishAcknowledgement: (() => void) | undefined
     vi.stubGlobal('window', {
       clearInterval,
+      clearTimeout: vi.fn(),
       location: new URL('https://app.example/basic/'),
       open,
       outerHeight: 900,
@@ -96,6 +98,10 @@ describe('Passport popup', () => {
       screenX: 0,
       screenY: 0,
       setInterval: vi.fn(() => 7),
+      setTimeout: vi.fn((callback: () => void) => {
+        finishAcknowledgement = callback
+        return 8
+      }),
     })
 
     const authorizationUrl = `${STAGING_PASSPORT_ORIGIN}/authorize#d=request`
@@ -107,19 +113,17 @@ describe('Passport popup', () => {
     )
     expect(popup.focus).toHaveBeenCalledOnce()
 
-    const outcome = takePassportOutcome(
-      {
-        data: {
-          type: 'pubky-passport.authorization-outcome',
-          version: 1,
-          outcome: 'success',
-          messageId: 'message-123',
-        },
-        origin: STAGING_PASSPORT_ORIGIN,
-        source: popup,
-      } as unknown as MessageEvent,
-      'attempt-123',
-    )
+    const message = {
+      data: {
+        type: 'pubky-passport.authorization-outcome',
+        version: 1,
+        outcome: 'success',
+        messageId: 'message-123',
+      },
+      origin: STAGING_PASSPORT_ORIGIN,
+      source: popup,
+    } as unknown as MessageEvent
+    const outcome = takePassportOutcome(message, 'attempt-123')
 
     expect(outcome).toBe('success')
     expect(popup.postMessage).toHaveBeenCalledWith(
@@ -131,6 +135,11 @@ describe('Passport popup', () => {
       STAGING_PASSPORT_ORIGIN,
     )
     expect(clearInterval).toHaveBeenCalledWith(7)
+    expect(takePassportOutcome(message, 'attempt-123')).toBeUndefined()
+    expect(popup.close).not.toHaveBeenCalled()
+    expect(finishAcknowledgement).toBeTypeOf('function')
+    finishAcknowledgement?.()
+    expect(popup.close).toHaveBeenCalledOnce()
   })
 
   it('rejects Passport messages from the wrong origin', () => {
@@ -176,6 +185,36 @@ describe('Passport popup', () => {
     expect(popup.close).toHaveBeenCalledOnce()
   })
 
+  it('gives a queued callback message time to beat the popup-close watchdog', () => {
+    const popup = popupWindow()
+    const onClose = vi.fn()
+    const host = stubPopupHost(popup)
+    openPassportPopup(`${STAGING_PASSPORT_ORIGIN}/authorize#d=request`, onClose)
+
+    popup.closed = true
+    host.runCloseCheck()
+    expect(onClose).not.toHaveBeenCalled()
+
+    expect(
+      takePassportOutcome(
+        {
+          data: {
+            type: 'basic-pubky-app.passport-return',
+            attemptId: 'attempt-123',
+            outcome: 'success',
+          },
+          origin: 'https://app.example',
+          source: popup,
+        } as unknown as MessageEvent,
+        'attempt-123',
+      ),
+    ).toBe('success')
+
+    expect(host.clearTimeout).toHaveBeenCalledWith(8)
+    host.finishGracePeriod()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('relays a callback navigation to its opener without treating it as authentication', () => {
     const opener = { closed: false, postMessage: vi.fn() }
     const replaceState = vi.fn()
@@ -207,7 +246,7 @@ function settings(location: PassportSettings['location'], customOrigin = ''): Pa
 
 function popupWindow() {
   return {
-    closed: false,
+    closed: false as boolean,
     close: vi.fn(),
     focus: vi.fn(),
     postMessage: vi.fn(),
@@ -215,14 +254,31 @@ function popupWindow() {
 }
 
 function stubPopupHost(popup: ReturnType<typeof popupWindow>) {
+  let closeCheck: (() => void) | undefined
+  let finishGracePeriod: (() => void) | undefined
+  const clearTimeout = vi.fn()
   vi.stubGlobal('window', {
     clearInterval: vi.fn(),
+    clearTimeout,
     location: new URL('https://app.example/basic/'),
     open: vi.fn(() => popup),
     outerHeight: 900,
     outerWidth: 1200,
     screenX: 0,
     screenY: 0,
-    setInterval: vi.fn(() => 7),
+    setInterval: vi.fn((callback: () => void) => {
+      closeCheck = callback
+      return 7
+    }),
+    setTimeout: vi.fn((callback: () => void) => {
+      finishGracePeriod = callback
+      return 8
+    }),
   })
+
+  return {
+    clearTimeout,
+    finishGracePeriod: () => finishGracePeriod?.(),
+    runCloseCheck: () => closeCheck?.(),
+  }
 }

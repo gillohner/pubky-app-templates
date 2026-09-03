@@ -23,10 +23,13 @@ const CALLBACK_MESSAGE_TYPE = 'basic-pubky-app.passport-return'
 const MESSAGE_VERSION = 1
 const CALLBACK_ATTEMPT_PARAMETER = 'attempt'
 const CALLBACK_OUTCOME_PARAMETER = 'outcome'
+const POPUP_CLOSE_GRACE_MS = 1_000
+const POPUP_ACK_CLOSE_DELAY_MS = 100
 
 let popup: Window | null | undefined
 let popupOrigin: string | undefined
 let popupCloseTimer: number | undefined
+let popupCloseGraceTimer: number | undefined
 
 export function passportOrigin(settings: PassportSettings): string | undefined {
   switch (settings.location) {
@@ -82,10 +85,15 @@ export function openPassportPopup(authorizationUrl: string, onClose: () => void)
   popup.focus()
   popupCloseTimer = window.setInterval(() => {
     if (!popup?.closed) return
-    popup = undefined
-    popupOrigin = undefined
     clearPopupCloseTimer()
-    onClose()
+    const closedPopup = popup
+    popupCloseGraceTimer = window.setTimeout(() => {
+      popupCloseGraceTimer = undefined
+      if (popup !== closedPopup) return
+      popup = undefined
+      popupOrigin = undefined
+      onClose()
+    }, POPUP_CLOSE_GRACE_MS)
   }, 500)
   return true
 }
@@ -96,7 +104,8 @@ export function takePassportOutcome(
 ): PassportOutcome | undefined {
   const message = parseOutcomeMessage(event)
   if (message && popup && popupOrigin) {
-    popup.postMessage(
+    const activePopup = popup
+    activePopup.postMessage(
       {
         type: ACKNOWLEDGEMENT_MESSAGE_TYPE,
         version: MESSAGE_VERSION,
@@ -107,6 +116,8 @@ export function takePassportOutcome(
     popup = undefined
     popupOrigin = undefined
     clearPopupCloseTimer()
+    clearPopupCloseGraceTimer()
+    window.setTimeout(() => closePopupWindow(activePopup), POPUP_ACK_CLOSE_DELAY_MS)
     return message.outcome
   }
 
@@ -121,12 +132,9 @@ export function closePassportPopup() {
   popup = undefined
   popupOrigin = undefined
   clearPopupCloseTimer()
+  clearPopupCloseGraceTimer()
 
-  try {
-    if (activePopup && !activePopup.closed) activePopup.close()
-  } catch {
-    // Popup cleanup is best effort when the cross-origin window is unavailable.
-  }
+  if (activePopup) closePopupWindow(activePopup)
 }
 
 /** Reads and removes a callback navigation hint; it never establishes authentication. */
@@ -155,6 +163,20 @@ function clearPopupCloseTimer() {
   if (popupCloseTimer === undefined) return
   window.clearInterval(popupCloseTimer)
   popupCloseTimer = undefined
+}
+
+function clearPopupCloseGraceTimer() {
+  if (popupCloseGraceTimer === undefined) return
+  window.clearTimeout(popupCloseGraceTimer)
+  popupCloseGraceTimer = undefined
+}
+
+function closePopupWindow(activePopup: Window) {
+  try {
+    if (!activePopup.closed) activePopup.close()
+  } catch {
+    // Popup cleanup is best effort when the cross-origin window is unavailable.
+  }
 }
 
 function parseOutcomeMessage(event: MessageEvent) {
