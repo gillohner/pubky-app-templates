@@ -58,6 +58,10 @@ import { restoreSavedSession, saveSession, startAuthFlow } from './pubky'
 beforeEach(() => {
   vi.clearAllMocks()
   const values = new Map<string, string>()
+  vi.stubGlobal('window', {
+    location: new URL('https://app.example/basic/?ignored=value#fragment'),
+    setTimeout,
+  })
   vi.stubGlobal('localStorage', {
     getItem: vi.fn((key: string) => values.get(key) ?? null),
     removeItem: vi.fn((key: string) => values.delete(key)),
@@ -76,7 +80,7 @@ describe('startAuthFlow', () => {
     expect(sdk.client.startGrantAuthFlow).toHaveBeenCalledWith('/pub/template/:rw', 'signin-kind', {
       clientId: 'template',
       relay: 'https://relay.example',
-      xCallback: { xSource: 'Pubky App Template' },
+      xCallback: expectedCallbacks(flow.attemptId),
     })
     expect(sdk.client.startCookieAuthFlow).not.toHaveBeenCalled()
     await expect(flow.awaitApproval).resolves.toBe(sdk.grantSession)
@@ -90,7 +94,7 @@ describe('startAuthFlow', () => {
       '/pub/template/:rw',
       'signin-kind',
       'https://relay.example',
-      { xSource: 'Pubky App Template' },
+      expectedCallbacks(flow.attemptId),
     )
     expect(sdk.client.startGrantAuthFlow).not.toHaveBeenCalled()
     await expect(flow.awaitApproval).resolves.toBe(sdk.cookieSession)
@@ -116,6 +120,16 @@ describe('startAuthFlow', () => {
     expect(sdk.grantFlow.free).toHaveBeenCalledOnce()
   })
 })
+
+function expectedCallbacks(attemptId: string) {
+  const base = `https://app.example/basic/?attempt=${attemptId}&outcome=`
+  return {
+    xSource: 'Pubky App Template',
+    xSuccess: `${base}success`,
+    xError: `${base}error`,
+    xCancel: `${base}cancel`,
+  }
+}
 
 describe('session persistence', () => {
   it('stores cookie metadata separately from the HTTP-only cookie', async () => {

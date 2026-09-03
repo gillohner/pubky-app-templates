@@ -3,12 +3,12 @@ import type { Session } from '@synonymdev/pubky'
 import {
   APP_CAPABILITIES,
   APP_CLIENT_ID,
-  APP_NAME,
   HTTP_RELAY,
   IS_TESTNET,
   STORAGE_NAMESPACE,
   TESTNET_HOST,
 } from './config'
+import { createPassportCallbacks } from './passport'
 
 const SESSION_KEY = STORAGE_NAMESPACE
   ? `${STORAGE_NAMESPACE}:${APP_CLIENT_ID}:session`
@@ -25,6 +25,7 @@ export const pubky = IS_TESTNET ? Pubky.testnet(TESTNET_HOST) : new Pubky()
 export type AuthMethod = 'grant' | 'cookie'
 
 export interface AppAuthFlow {
+  attemptId: string
   authorizationUrl: string
   awaitApproval: Promise<Session>
   cancel: () => void
@@ -53,7 +54,8 @@ export async function signupDevelopmentUser(homeserver: string) {
 }
 
 export async function startAuthFlow(authMethod: AuthMethod): Promise<AppAuthFlow> {
-  const xCallback = { xSource: APP_NAME }
+  const attemptId = crypto.randomUUID()
+  const xCallback = createPassportCallbacks(attemptId)
   const flow: PollableAuthFlow =
     authMethod === 'grant'
       ? await pubky.startGrantAuthFlow(APP_CAPABILITIES, AuthFlowKind.signin(), {
@@ -65,6 +67,7 @@ export async function startAuthFlow(authMethod: AuthMethod): Promise<AppAuthFlow
   const approval = awaitAuthApproval(flow)
 
   return {
+    attemptId,
     authorizationUrl: flow.authorizationUrl,
     awaitApproval: approval.awaitApproval,
     cancel: approval.cancel,

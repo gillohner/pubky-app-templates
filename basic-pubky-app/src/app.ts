@@ -28,7 +28,10 @@ import {
   DEFAULT_PASSPORT_SETTINGS,
   openPassportPopup,
   passportOrigin,
+  readCallbackOutcome,
+  takePassportOutcome,
   type PassportLocation,
+  type PassportOutcome,
   type PassportSettings,
 } from './passport'
 import {
@@ -76,6 +79,10 @@ export function start(root: HTMLElement) {
   app.addEventListener('change', handleChange)
   app.addEventListener('input', handleInput)
   app.addEventListener('submit', handleSubmit)
+  window.addEventListener('message', handlePassportMessage)
+
+  const callbackOutcome = readCallbackOutcome()
+  if (callbackOutcome) setPassportOutcome(callbackOutcome)
   mount()
   void init()
 }
@@ -364,7 +371,7 @@ function handleOpenPassport() {
   const authorizationUrl = passportAuthorizationUrl()
   if (!authorizationUrl || state.signin.expired) return
 
-  if (!openPassportPopup(authorizationUrl)) {
+  if (!openPassportPopup(authorizationUrl, handlePassportPopupClosed)) {
     setError(new Error('Passport popup was blocked. Allow popups for this site and try again.'))
     updateStatus()
     return
@@ -372,6 +379,43 @@ function handleOpenPassport() {
 
   setNotice('Passport opened. Complete the authorization in the popup.')
   updateStatus()
+}
+
+function handlePassportPopupClosed() {
+  setError(new Error('Passport popup was closed before authorization completed.'))
+  updateStatus()
+  void refreshSignin(true)
+}
+
+function handlePassportMessage(event: MessageEvent) {
+  let outcome: PassportOutcome | undefined
+  try {
+    outcome = takePassportOutcome(event, state.authFlow?.attemptId)
+  } catch (error) {
+    setError(error)
+    updateStatus()
+    return
+  }
+  if (!outcome) return
+
+  setPassportOutcome(outcome)
+  updateStatus()
+
+  if (outcome !== 'success') void refreshSignin(true)
+}
+
+function setPassportOutcome(outcome: PassportOutcome) {
+  switch (outcome) {
+    case 'success':
+      setNotice('Passport reported success. Waiting for verified Pubky relay approval...')
+      break
+    case 'error':
+      setError(new Error('Passport reported that it could not approve the request.'))
+      break
+    case 'cancel':
+      setNotice('Passport authorization was cancelled.')
+      break
+  }
 }
 
 async function handleDevelopmentSignup(form: HTMLFormElement) {
