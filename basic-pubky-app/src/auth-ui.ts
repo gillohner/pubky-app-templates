@@ -1,10 +1,16 @@
 import { toCanvas } from 'qrcode'
 import { DEVELOPMENT_SIGNUP_HOMESERVER, SHOW_DEVELOPMENT_SIGNUP } from './config'
 import { disabledAttr, escapeHtml } from './html'
+import {
+  LOCAL_PASSPORT_ORIGIN,
+  STAGING_PASSPORT_ORIGIN,
+  passportOrigin,
+  type PassportSettings,
+} from './passport'
+import type { AuthMethod } from './pubky'
 
 export interface SigninState {
   authorizationUrl?: string
-  passportAuthorizationUrl?: string
   ringCopied?: boolean
   passportCopied?: boolean
   expired?: boolean
@@ -18,16 +24,18 @@ const RING_QR_SIZE = 220
 const AUTHORIZE_RING_LINK_ID = 'authorize-ring'
 const COPY_RING_URL_ID = 'copy-ring-authorization-url'
 const COPY_PASSPORT_URL_ID = 'copy-passport-authorization-url'
+const COPY_LINK_LABEL = 'Copy link'
 
 export function authViewHtml(
   signin: SigninState,
   busy: string | undefined,
-  passportEnabled: boolean,
+  passport: PassportSettings,
+  authMethod: AuthMethod,
 ) {
-  const cardCount = 1 + Number(passportEnabled) + Number(SHOW_DEVELOPMENT_SIGNUP)
+  const cardCount = 2 + Number(SHOW_DEVELOPMENT_SIGNUP)
   return `
     <section id="signin-view" class="auth-grid ${cardCount === 1 ? 'single-card' : ''}">
-      ${authCardsHtml(signin, busy, passportEnabled)}
+      ${authCardsHtml(signin, busy, passport, authMethod)}
     </section>
   `
 }
@@ -35,18 +43,19 @@ export function authViewHtml(
 export function updateSigninView(
   signin: SigninState,
   busy: string | undefined,
-  passportEnabled: boolean,
+  passport: PassportSettings,
+  authMethod: AuthMethod,
 ) {
   const view = document.querySelector('#signin-view')
   if (!view) return
-  view.innerHTML = authCardsHtml(signin, busy, passportEnabled)
+  view.innerHTML = authCardsHtml(signin, busy, passport, authMethod)
   void renderRingSigninQr(signin)
 }
 
 export function updateCopyButton(kind: AuthorizationUrlKind, copied: boolean) {
   const id = kind === 'ring' ? COPY_RING_URL_ID : COPY_PASSPORT_URL_ID
   const button = document.querySelector(`#${id}`)
-  if (button) button.textContent = copied ? 'Copied' : copyButtonLabel(kind)
+  if (button) button.textContent = copied ? 'Copied' : COPY_LINK_LABEL
 }
 
 export function updateAuthorizeLink(canUse: boolean, authorizationUrl?: string) {
@@ -88,10 +97,15 @@ export async function renderRingSigninQr(signin: SigninState) {
   }
 }
 
-function authCardsHtml(signin: SigninState, busy: string | undefined, passportEnabled: boolean) {
+function authCardsHtml(
+  signin: SigninState,
+  busy: string | undefined,
+  passport: PassportSettings,
+  authMethod: AuthMethod,
+) {
   return `
     ${ringCardHtml(signin, busy)}
-    ${passportEnabled ? passportCardHtml(signin, busy) : ''}
+    ${passportCardHtml(signin, passport, authMethod, busy)}
     ${SHOW_DEVELOPMENT_SIGNUP ? newIdentityCardHtml(busy) : ''}
   `
 }
@@ -115,7 +129,7 @@ function ringCardHtml(signin: SigninState, busy?: string) {
         <div class="ring-actions">
           ${authorizeRingLinkHtml(canUse, authorizationUrl)}
           <button id="${COPY_RING_URL_ID}" type="button" ${disabledAttr(!canUse)}>
-            ${ringCopied ? 'Copied' : copyButtonLabel('ring')}
+            ${ringCopied ? 'Copied' : COPY_LINK_LABEL}
           </button>
         </div>
       </div>
@@ -123,9 +137,17 @@ function ringCardHtml(signin: SigninState, busy?: string) {
   `
 }
 
-function passportCardHtml(signin: SigninState, busy?: string) {
-  const { expired, loading, passportAuthorizationUrl, passportCopied } = signin
-  const canUse = !busy && Boolean(passportAuthorizationUrl) && !loading && !expired
+function passportCardHtml(
+  signin: SigninState,
+  passport: PassportSettings,
+  authMethod: AuthMethod,
+  busy?: string,
+) {
+  const { authorizationUrl, expired, loading, passportCopied } = signin
+  const customOrigin = passport.location === 'custom' ? passportOrigin(passport) : undefined
+  const customInvalid = passport.location === 'custom' && !customOrigin
+  const canUse =
+    !busy && Boolean(authorizationUrl) && !loading && !expired && Boolean(passportOrigin(passport))
 
   return `
     <section id="passport-signin-card" class="panel auth-card">
@@ -133,21 +155,75 @@ function passportCardHtml(signin: SigninState, busy?: string) {
         <h2>Sign in with Pubky Passport</h2>
       </div>
       <div class="passport-signin">
-        <div class="passport-summary">
-          <strong>Continue in your browser</strong>
-          <p class="muted">
-            Open Passport to review the requested access and choose your Pubky identity.
-          </p>
+        <div class="passport-options">
+          <label>
+            Passport URL
+            <select id="passport-location">
+              <option value="staging" ${selectedAttr(passport.location === 'staging')}>
+                ${STAGING_PASSPORT_ORIGIN}
+              </option>
+              <option value="local" ${selectedAttr(passport.location === 'local')}>
+                ${LOCAL_PASSPORT_ORIGIN}
+              </option>
+              <option value="custom" ${selectedAttr(passport.location === 'custom')}>
+                Custom URL
+              </option>
+            </select>
+          </label>
+          ${
+            passport.location === 'custom'
+              ? `
+                <label>
+                  Custom Passport URL
+                  <input
+                    id="custom-passport-origin"
+                    type="url"
+                    inputmode="url"
+                    autocomplete="url"
+                    placeholder="https://passport.example.com"
+                    value="${escapeHtml(passport.customOrigin)}"
+                    aria-invalid="${customInvalid}"
+                    aria-describedby="custom-passport-origin-help"
+                  />
+                </label>
+                <p
+                  id="custom-passport-origin-help"
+                  class="${customInvalid ? 'field-error' : 'muted'}"
+                >
+                  Custom Passport URLs must use HTTPS.
+                </p>
+              `
+              : ''
+          }
+          <fieldset class="auth-method-switch">
+            <legend>Authentication</legend>
+            <label>
+              <input
+                type="radio"
+                name="auth-method"
+                value="grant"
+                ${checkedAttr(authMethod === 'grant')}
+              />
+              Grant
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="auth-method"
+                value="cookie"
+                ${checkedAttr(authMethod === 'cookie')}
+              />
+              Cookie
+            </label>
+          </fieldset>
+          <p class="muted">Changing authentication creates a fresh Pubky authorization link.</p>
         </div>
         <div class="passport-actions">
           <button id="open-passport" class="primary" type="button" ${disabledAttr(!canUse)}>
             Open Passport
           </button>
-          <button id="open-local-passport" type="button" ${disabledAttr(!canUse)}>
-            Open local Passport
-          </button>
           <button id="${COPY_PASSPORT_URL_ID}" type="button" ${disabledAttr(!canUse)}>
-            ${passportCopied ? 'Copied' : copyButtonLabel('passport')}
+            ${passportCopied ? 'Copied' : COPY_LINK_LABEL}
           </button>
         </div>
       </div>
@@ -155,8 +231,12 @@ function passportCardHtml(signin: SigninState, busy?: string) {
   `
 }
 
-function copyButtonLabel(kind: AuthorizationUrlKind) {
-  return kind === 'ring' ? 'Copy link' : 'Copy Passport URL'
+function selectedAttr(selected: boolean) {
+  return selected ? 'selected' : ''
+}
+
+function checkedAttr(checked: boolean) {
+  return checked ? 'checked' : ''
 }
 
 function authorizeRingLinkHtml(canUse: boolean, authorizationUrl: string | undefined) {

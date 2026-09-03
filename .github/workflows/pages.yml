@@ -42,7 +42,6 @@ jobs:
         run: npm run build -- --base ./ --outDir dist/mainnet
         working-directory: basic-pubky-app
         env:
-          VITE_PASSPORT_ORIGIN: 'https://passport.staging.pubky.app'
           VITE_PUBKY_TESTNET: 'false'
 
       - name: Build basic Pubky app for testnet

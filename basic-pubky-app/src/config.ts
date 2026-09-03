@@ -10,8 +10,6 @@ export const TESTNET_HOST = import.meta.env.VITE_PUBKY_TESTNET_HOST || undefined
 export const HTTP_RELAY = import.meta.env.VITE_PUBKY_HTTP_RELAY?.trim() || undefined
 export const STORAGE_NAMESPACE = import.meta.env.VITE_PUBKY_STORAGE_NAMESPACE?.trim() || undefined
 
-export const PASSPORT_ORIGIN = import.meta.env.VITE_PASSPORT_ORIGIN?.trim() || undefined
-
 export const SHOW_DEVELOPMENT_SIGNUP =
   import.meta.env.DEV && IS_TESTNET && import.meta.env.VITE_SHOW_DEVELOPMENT_SIGNUP !== 'false'
 

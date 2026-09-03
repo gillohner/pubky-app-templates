@@ -8,10 +8,11 @@ This template focuses on Pubky’s core building blocks. The included vanilla HT
 
 ## What's Included
 
-- Grant-based Pubky Ring sign-in with a QR code, authorization link, and copy-to-clipboard action.
-- Optional browser-based Passport sign-in using a popup and the Passport `#d` authorization fragment.
+- Pubky Ring sign-in with a QR code, authorization link, and copy-to-clipboard action.
+- Browser-based Passport sign-in with selectable grant or cookie authentication and configurable
+  Passport origins.
 - A development-only authentication shortcut that removes sign-in friction on a local testnet. It requires `signup_mode = "open"` and is not intended as a pattern for production apps.
-- Session persistence across page reloads via the SDK browser session store, plus sign out.
+- Session persistence across page reloads for grant and cookie authentication, plus sign out.
 - File storage helpers under a configured path on the user’s Homeserver.
 - A live event stream subscription scoped to the configured path.
 - Preconfigured weekly Dependabot updates for all npm dependencies, with Pubky stack packages grouped together.
@@ -43,49 +44,43 @@ For complete local Homeserver, testnet, and authentication setup, follow the [Pu
 The hosted GitHub Pages builds are available for
 [mainnet](https://pubky.github.io/pubky-app-templates/mainnet/basic-pubky-app/) and a
 [local testnet](https://pubky.github.io/pubky-app-templates/testnet/basic-pubky-app/). Both are
-production builds. The mainnet build enables the optional staging Passport integration.
+production builds. Passport defaults to the staging deployment in both builds.
 
-## Optional Passport Integration
+## Passport Integration
 
-Set `VITE_PASSPORT_ORIGIN` to add a separate **Sign in with Pubky Passport** card without changing
-the standard Pubky Ring card or grant flow:
+The Passport card follows the
+[Passport integration guide](https://github.com/pubky/pubky-passport/blob/186773807be2db1d5ce9f70b79b4815dfe326c4f/docs/integration.md): the Pubky SDK creates the
+authorization request, the app wraps it in Passport's `/authorize#d=...` URL, and only the
+`Session` returned through the SDK relay authenticates the user.
 
-```dotenv
-VITE_PASSPORT_ORIGIN=https://passport.staging.pubky.app
-```
+Choose a Passport URL from the card:
 
-For local testing, place the setting in an ignored `.env.local` file before starting Vite.
+- `https://staging.passport.pubky.app` (default)
+- `https://localhost:3000`
+- A custom HTTPS origin
 
-The adapter wraps the SDK-generated request for Passport like this:
+Custom values are normalized to their origin before the app adds `/authorize`. The generated Pubky
+request is then encoded exactly once:
 
 ```ts
-const passportUrl = `https://passport.staging.pubky.app/authorize#d=${encodeURIComponent(flow.authorizationUrl)}`
+const passportUrl = `${passportOrigin}/authorize#d=${encodeURIComponent(flow.authorizationUrl)}`
 ```
 
-The SDK request identifies the app as **Pubky App Template** through `xSource`. On HTTPS
-deployments, it also includes same-origin success, error, and cancellation callbacks. The optional
-popup adapter validates Passport's origin, message version, and exact popup
-source before acknowledging an outcome. Callback navigation is correlated to the active attempt
-before it is accepted. These messages improve popup UX only: the app establishes a session
-exclusively from the SDK's encrypted relay approval.
+Grant authentication is selected by default. Switching to cookie authentication creates a fresh
+SDK request with `pubky.startCookieAuthFlow()`; switching back creates one with
+`pubky.startGrantAuthFlow()`. The Ring QR and Passport link both use the current request.
 
-On an HTTP development origin, Passport still opens and successful authentication still completes
-through the relay, but the three return callback URLs are omitted because Passport accepts only
-HTTPS callbacks. This makes LAN testing possible with `npm run dev -- --host 0.0.0.0`; use a
-deployed HTTPS build to exercise callback outcomes.
+The card has two actions:
 
-**Copy Passport URL** exposes the exact generated `#d` URL for focused parser testing. Treat it as a
-secret because the embedded Pubky authorization request contains auth material.
+- **Open Passport** opens the generated URL in a popup.
+- **Copy link** copies the same generated URL.
 
-**Open local Passport** sends the same authorization request to
-`https://localhost:3000/authorize`, making it possible to test a locally running Passport without
-changing `VITE_PASSPORT_ORIGIN`. The popup response is still checked against the exact origin that
-was opened.
+Treat copied Passport links as secrets because the embedded Pubky request contains relay and
+authentication material. The template polls the SDK for up to five minutes and discards the flow
+after approval, cancellation by the app, failure, or expiry.
 
-The Ring card's QR code, **Authorize with Pubky Ring**, and **Copy link** actions always use the
-unwrapped `flow.authorizationUrl`. The Passport card alone uses Passport's `/authorize#d=...` URL
-for **Open Passport** and **Copy Passport URL**, so Ring can scan the QR as a normal Pubky auth
-request.
+Grant sessions are persisted with `browserSessionStore`. Cookie sessions persist only non-secret
+metadata in local storage; the browser keeps the actual HTTP-only session cookie.
 
 ## App Settings
 
@@ -98,7 +93,7 @@ export const APP_CAPABILITIES = `${APP_PATH}:rw`
 ```
 
 Change `APP_CLIENT_ID` first when starting a real app; the path and capabilities are derived from
-the client ID. The file also centralizes testnet, relay, and optional Passport settings.
+the client ID. The file also centralizes testnet and relay settings.
 
 Set `VITE_PUBKY_STORAGE_NAMESPACE` when multiple builds share an origin and should keep their saved
 sessions separate.

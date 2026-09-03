@@ -24,14 +24,15 @@ import {
 } from './html'
 import {
   closePassportPopup,
-  createLocalPassportAuthorizationUrl,
-  hasPassportIntegration,
+  createPassportAuthorizationUrl,
+  DEFAULT_PASSPORT_SETTINGS,
   openPassportPopup,
-  readCallbackOutcome,
-  takePassportOutcome,
-  type PassportOutcome,
+  passportOrigin,
+  type PassportLocation,
+  type PassportSettings,
 } from './passport'
 import {
+  type AuthMethod,
   isAuthCanceled,
   isAuthExpired,
   restoreSavedSession,
@@ -51,6 +52,8 @@ interface State {
   noticePath?: string
   files: AppFile[]
   authFlow?: AppAuthFlow
+  authMethod: AuthMethod
+  passport: PassportSettings
   signin: SigninState
   session?: Session
   stopEventStream?: () => Promise<void>
@@ -58,22 +61,21 @@ interface State {
 }
 
 const state: State = {
+  authMethod: 'grant',
   eventStreamEvents: [],
   files: [],
+  passport: { ...DEFAULT_PASSPORT_SETTINGS },
   signin: {},
 }
 
 let app: HTMLElement
-const passportEnabled = hasPassportIntegration()
 
 export function start(root: HTMLElement) {
   app = root
   app.addEventListener('click', handleClick)
+  app.addEventListener('change', handleChange)
+  app.addEventListener('input', handleInput)
   app.addEventListener('submit', handleSubmit)
-  if (passportEnabled) window.addEventListener('message', handlePassportMessage)
-
-  const callbackOutcome = passportEnabled ? readCallbackOutcome() : undefined
-  if (callbackOutcome) setPassportOutcome(callbackOutcome)
   mount()
   void init()
 }
@@ -99,7 +101,7 @@ function mount() {
         ${session ? signedInHeader(session) : ''}
       </header>
       <div id="status">${statusHtml()}</div>
-      <div id="view">${session ? signedInViewHtml() : authViewHtml(state.signin, state.busy, passportEnabled)}</div>
+      <div id="view">${session ? signedInViewHtml() : authViewHtml(state.signin, state.busy, state.passport, state.authMethod)}</div>
       <footer class="app-footer">Built with <a href="https://www.npmjs.com/package/@synonymdev/pubky">Pubky SDK</a> v${pubkySdkVersion}</footer>
     </main>
   `
@@ -148,6 +150,7 @@ function syncControls() {
   const busy = Boolean(state.busy)
   const loading = Boolean(state.signin.loading)
   const canUse = canUseAuthorizationUrl()
+  const canUsePassport = canUse && Boolean(passportAuthorizationUrl())
 
   for (const button of app.querySelectorAll('button')) {
     switch (button.id) {
@@ -159,13 +162,18 @@ function syncControls() {
         break
       case 'copy-passport-authorization-url':
       case 'open-passport':
-      case 'open-local-passport':
-        button.disabled = !canUse || !state.signin.passportAuthorizationUrl
+        button.disabled = !canUsePassport
         break
       default:
         button.disabled = busy
         break
     }
+  }
+
+  for (const control of app.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+    '.passport-options input, .passport-options select',
+  )) {
+    control.disabled = busy || loading
   }
 
   updateAuthorizeLink(canUse, state.signin.authorizationUrl)
@@ -207,9 +215,6 @@ function handleClick(event: MouseEvent) {
     case 'open-passport':
       handleOpenPassport()
       break
-    case 'open-local-passport':
-      handleOpenPassport(true)
-      break
     case 'sign-out':
       void handleSignOut()
       break
@@ -223,6 +228,40 @@ function handleClick(event: MouseEvent) {
     default:
       break
   }
+}
+
+function handleChange(event: Event) {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return
+
+  if (target.id === 'passport-location') {
+    const location = parsePassportLocation(target.value)
+    if (!location) return
+    state.passport = { ...state.passport, location }
+    state.signin.passportCopied = false
+    updateSigninView(state.signin, state.busy, state.passport, state.authMethod)
+    syncControls()
+    return
+  }
+
+  if (target instanceof HTMLInputElement && target.name === 'auth-method') {
+    const authMethod = parseAuthMethod(target.value)
+    if (!authMethod || authMethod === state.authMethod) return
+    state.authMethod = authMethod
+    void refreshSignin()
+  }
+}
+
+function handleInput(event: Event) {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement) || target.id !== 'custom-passport-origin') return
+
+  state.passport = { ...state.passport, customOrigin: target.value }
+  const valid = Boolean(passportOrigin(state.passport))
+  target.setAttribute('aria-invalid', String(!valid))
+  const help = app.querySelector('#custom-passport-origin-help')
+  if (help) help.className = valid ? 'muted' : 'field-error'
+  syncControls()
 }
 
 function handleSubmit(event: SubmitEvent) {
@@ -245,24 +284,22 @@ async function refreshSignin(preserveError = false) {
   }
   if (!preserveError) state.error = undefined
   updateStatus()
-  updateSigninView(state.signin, state.busy, passportEnabled)
+  updateSigninView(state.signin, state.busy, state.passport, state.authMethod)
   syncControls()
 
   try {
-    const flow = await startAuthFlow()
-    state.authFlow = flow
-
+    const flow = await startAuthFlow(state.authMethod)
     if (!isActiveSignin(token)) {
       flow.cancel()
       return
     }
 
+    state.authFlow = flow
     state.signin = {
       authorizationUrl: flow.authorizationUrl,
-      passportAuthorizationUrl: flow.passportAuthorizationUrl,
       token,
     }
-    updateSigninView(state.signin, state.busy, passportEnabled)
+    updateSigninView(state.signin, state.busy, state.passport, state.authMethod)
     syncControls()
 
     void handleApproval(flow, token)
@@ -273,7 +310,7 @@ async function refreshSignin(preserveError = false) {
     state.signin = {}
     setError(error)
     updateStatus()
-    updateSigninView(state.signin, state.busy, passportEnabled)
+    updateSigninView(state.signin, state.busy, state.passport, state.authMethod)
     syncControls()
   }
 }
@@ -296,7 +333,7 @@ async function handleApproval(flow: AppAuthFlow, token: symbol) {
     state.signin = isAuthExpired(error) ? { expired: true, token } : {}
     setError(error)
     updateStatus()
-    updateSigninView(state.signin, state.busy, passportEnabled)
+    updateSigninView(state.signin, state.busy, state.passport, state.authMethod)
     syncControls()
   }
 }
@@ -323,62 +360,18 @@ async function handleCopyAuthorizationUrl(kind: AuthorizationUrlKind) {
   }
 }
 
-function handleOpenPassport(useLocalPassport = false) {
-  const passportAuthorizationUrl = state.signin.passportAuthorizationUrl
-  const authorizationUrl =
-    passportAuthorizationUrl && useLocalPassport
-      ? createLocalPassportAuthorizationUrl(passportAuthorizationUrl)
-      : passportAuthorizationUrl
+function handleOpenPassport() {
+  const authorizationUrl = passportAuthorizationUrl()
   if (!authorizationUrl || state.signin.expired) return
 
-  if (!openPassportPopup(authorizationUrl, handlePassportPopupClosed)) {
+  if (!openPassportPopup(authorizationUrl)) {
     setError(new Error('Passport popup was blocked. Allow popups for this site and try again.'))
     updateStatus()
     return
   }
 
-  setNotice(
-    `${useLocalPassport ? 'Local Passport' : 'Passport'} opened. Complete the authorization in the popup.`,
-  )
+  setNotice('Passport opened. Complete the authorization in the popup.')
   updateStatus()
-}
-
-function handlePassportPopupClosed() {
-  setError(new Error('Passport popup was closed before authorization completed.'))
-  updateStatus()
-}
-
-function handlePassportMessage(event: MessageEvent) {
-  let outcome: PassportOutcome | undefined
-  try {
-    outcome = takePassportOutcome(event, state.authFlow?.attemptId)
-  } catch (error) {
-    setError(error)
-    updateStatus()
-    return
-  }
-  if (!outcome) return
-
-  setPassportOutcome(outcome)
-  updateStatus()
-
-  if (outcome !== 'success') {
-    void refreshSignin(true)
-  }
-}
-
-function setPassportOutcome(outcome: PassportOutcome) {
-  switch (outcome) {
-    case 'success':
-      setNotice('Passport reported success. Waiting for verified Pubky relay approval...')
-      break
-    case 'error':
-      setError(new Error('Passport reported that it could not approve the request.'))
-      break
-    case 'cancel':
-      setNotice('Passport authorization was cancelled.')
-      break
-  }
 }
 
 async function handleDevelopmentSignup(form: HTMLFormElement) {
@@ -512,7 +505,14 @@ function cancelSignin() {
 }
 
 function authorizationUrlFor(kind: AuthorizationUrlKind) {
-  return kind === 'ring' ? state.signin.authorizationUrl : state.signin.passportAuthorizationUrl
+  return kind === 'ring' ? state.signin.authorizationUrl : passportAuthorizationUrl()
+}
+
+function passportAuthorizationUrl() {
+  const authorizationUrl = state.signin.authorizationUrl
+  return authorizationUrl
+    ? createPassportAuthorizationUrl(authorizationUrl, state.passport)
+    : undefined
 }
 
 function setCopied(kind: AuthorizationUrlKind, copied: boolean) {
@@ -522,6 +522,14 @@ function setCopied(kind: AuthorizationUrlKind, copied: boolean) {
 
 function isActiveSignin(token: symbol) {
   return state.signin.token === token
+}
+
+function parsePassportLocation(value: string): PassportLocation | undefined {
+  return value === 'staging' || value === 'local' || value === 'custom' ? value : undefined
+}
+
+function parseAuthMethod(value: string): AuthMethod | undefined {
+  return value === 'grant' || value === 'cookie' ? value : undefined
 }
 
 function setNotice(notice: string, path?: string) {
