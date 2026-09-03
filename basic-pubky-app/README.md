@@ -75,7 +75,8 @@ over HTTPS. The Ring QR and Passport link both use the current request.
 The card has two actions:
 
 - **Open Passport** opens the generated URL in a popup.
-- **Copy link** copies the same generated URL.
+- **Copy link** copies the same generated URL. Keep the original app tab open so it can continue
+  polling the relay; opening the copied link in that same tab abandons its in-memory flow.
 
 The popup keeps its opener channel so Passport can report an outcome directly. The app validates
 the exact selected Passport origin, popup window, message type, version, outcome, and message ID
@@ -88,8 +89,9 @@ HTTP development origin, the SDK request contains `xSource` only, since Passport
 HTTPS.
 
 Success, error, and cancel messages are UI signals only. A success message keeps the flow polling;
-only the `Session` returned by the SDK relay authenticates the user. Error, cancellation, manual
-popup closure, or timeout discards that flow and creates a fresh authorization link.
+only the `Session` returned by the SDK relay authenticates the user. Error, cancellation, and
+manual popup closure discard the flow and create a fresh authorization link. A timeout discards
+the flow and asks the user to generate a new link.
 
 Treat copied Passport links as secrets because the embedded Pubky request contains relay and
 authentication material. The template polls the SDK for up to five minutes and discards the flow

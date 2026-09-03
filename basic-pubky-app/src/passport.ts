@@ -24,8 +24,8 @@ const MESSAGE_VERSION = 1
 const CALLBACK_ATTEMPT_PARAMETER = 'attempt'
 const CALLBACK_OUTCOME_PARAMETER = 'outcome'
 const POPUP_CLOSE_GRACE_MS = 1_000
-const POPUP_ACK_CLOSE_DELAY_MS = 100
 const ACKNOWLEDGEMENT_CACHE_MS = 3_000
+const POPUP_ACK_CLOSE_DELAY_MS = ACKNOWLEDGEMENT_CACHE_MS + 100
 
 interface AcknowledgedOutcome {
   popup: Window
@@ -82,11 +82,17 @@ export function openPassportPopup(authorizationUrl: string, onClose: () => void)
 
   closePassportPopup()
   popupOrigin = new URL(authorizationUrl).origin
-  popup = window.open(
-    authorizationUrl,
-    `pubky-passport-${crypto.randomUUID()}`,
-    `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
-  )
+  try {
+    popup = window.open(
+      authorizationUrl,
+      `pubky-passport-${crypto.randomUUID()}`,
+      `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
+    )
+  } catch {
+    popup = undefined
+    popupOrigin = undefined
+    return false
+  }
   if (!popup) {
     popupOrigin = undefined
     return false
@@ -149,11 +155,15 @@ export function readCallbackOutcome(): PassportOutcome | undefined {
   const url = new URL(window.location.href)
   const attemptId = url.searchParams.get(CALLBACK_ATTEMPT_PARAMETER)
   const outcome = parseOutcome(url.searchParams.get(CALLBACK_OUTCOME_PARAMETER))
-  if (!attemptId || !outcome) return undefined
+  const hasCallbackParameters =
+    url.searchParams.has(CALLBACK_ATTEMPT_PARAMETER) ||
+    url.searchParams.has(CALLBACK_OUTCOME_PARAMETER)
+  if (!hasCallbackParameters) return undefined
 
   url.searchParams.delete(CALLBACK_ATTEMPT_PARAMETER)
   url.searchParams.delete(CALLBACK_OUTCOME_PARAMETER)
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  if (!attemptId || !outcome) return undefined
 
   if (window.opener && !window.opener.closed) {
     window.opener.postMessage(

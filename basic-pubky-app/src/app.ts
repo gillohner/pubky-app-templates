@@ -382,6 +382,7 @@ function handleOpenPassport() {
 }
 
 function handlePassportPopupClosed() {
+  if (!state.authFlow || state.busy) return
   setError(new Error('Passport popup was closed before authorization completed.'))
   updateStatus()
   void refreshSignin(true)

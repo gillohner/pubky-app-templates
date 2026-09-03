@@ -138,11 +138,28 @@ describe('Passport popup', () => {
     expect(takePassportOutcome(message, 'attempt-123')).toBeUndefined()
     expect(popup.postMessage).toHaveBeenCalledTimes(2)
     expect(popup.close).not.toHaveBeenCalled()
-    expect(scheduledTimeouts.get(100)).toBeTypeOf('function')
-    scheduledTimeouts.get(100)?.()
-    expect(popup.close).toHaveBeenCalledOnce()
     expect(scheduledTimeouts.get(3_000)).toBeTypeOf('function')
     scheduledTimeouts.get(3_000)?.()
+    expect(scheduledTimeouts.get(3_100)).toBeTypeOf('function')
+    scheduledTimeouts.get(3_100)?.()
+    expect(popup.close).toHaveBeenCalledOnce()
+  })
+
+  it('reports a blocked popup when window.open throws', () => {
+    vi.stubGlobal('window', {
+      clearInterval: vi.fn(),
+      clearTimeout: vi.fn(),
+      location: new URL('https://app.example/basic/'),
+      open: vi.fn(() => {
+        throw new DOMException('Blocked', 'SecurityError')
+      }),
+      outerHeight: 900,
+      outerWidth: 1200,
+      screenX: 0,
+      screenY: 0,
+    })
+
+    expect(openPassportPopup(`${STAGING_PASSPORT_ORIGIN}/authorize#d=request`, vi.fn())).toBe(false)
   })
 
   it('binds Passport messages to the exact custom origin that was opened', () => {
@@ -252,6 +269,20 @@ describe('Passport popup', () => {
 
     expect(readCallbackOutcome()).toBeUndefined()
     expect(replaceState).toHaveBeenCalledWith(null, '', '/basic/')
+  })
+
+  it('scrubs malformed callback parameters', () => {
+    const replaceState = vi.fn()
+    vi.stubGlobal('window', {
+      history: { replaceState, state: null },
+      location: new URL(
+        'https://app.example/basic/?keep=value&attempt=attempt-123&outcome=bogus#fragment',
+      ),
+      opener: null,
+    })
+
+    expect(readCallbackOutcome()).toBeUndefined()
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/basic/?keep=value#fragment')
   })
 })
 
